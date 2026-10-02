@@ -1,0 +1,11 @@
+data/
+*.db
+*.db.bak.*
+.env
+__pycache__/
+.venv/
+.pytest_cache/
+*.pyc
+README.md.old
+node_modules/
+clients/node/dist/

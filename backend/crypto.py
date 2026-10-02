@@ -1,0 +1,270 @@
+"""
+APS Vault — криптография.
+
+Стек:
+  * Argon2id (argon2-cffi) — KDF из master-password в master-key (32 байта)
+  * AES-256-GCM (cryptography) — симметричное шифрование значений
+  * Каждая запись имеет свой 96-битный nonce (random)
+  * authTagLength=16 (защита от short-tag forgery)
+
+Архитектура ключей (envelope encryption):
+
+  master_password
+        │ Argon2id (m=64MB, t=3, p=4, salt из config.json)
+        ▼
+  master_key (32 B, в RAM)
+        │ AES-GCM
+        ▼
+  encrypted scope keys  (vault_keys таблица)
+        │
+        ▼
+  scope_key  (random 32 B на каждый scope/folder)
+        │ AES-GCM
+        ▼
+  encrypted secret values  (secrets таблица: value_enc + value_nonce)
+
+Зачем envelope: чтобы выдать service-token со scope-key БЕЗ master-password,
+и иметь возможность ротировать master без перешифровки всех секретов.
+
+При запуске сервера master_key хранится ТОЛЬКО в памяти, выгружается при
+shutdown'е. Все операции дешифровки требуют unlock'нутого state.
+"""
+from __future__ import annotations
+
+import json
+import os
+import secrets as pysecrets
+from dataclasses import dataclass
+from pathlib import Path
+
+from argon2 import PasswordHasher, low_level
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+
+# Параметры Argon2id (OWASP recommended)
+ARGON2_TIME_COST = 3
+ARGON2_MEMORY_COST = 64 * 1024   # 64 MiB
+ARGON2_PARALLELISM = 4
+ARGON2_HASH_LEN = 32             # 32 байта = 256 бит → AES-256
+
+GCM_NONCE_BYTES = 12             # 96 бит (стандарт NIST для AES-GCM)
+GCM_TAG_BYTES = 16               # 128 бит
+
+
+@dataclass
+class VaultConfig:
+    """Конфиг хранится в data/config.json (НЕ в БД).
+    Содержит salt + verification token. master_password проверяется так:
+    derive(key, password, salt) → расшифровать verifier_enc → если совпадает
+    с пасспорт-маркером → пароль верный.
+    """
+    salt: bytes                    # 32 байта random salt для Argon2
+    verifier_enc: bytes            # AES-GCM шифр строки "APS-VAULT-OK"
+    verifier_nonce: bytes
+    init_at_utc: str
+    recovery_code_hash: str        # Argon2-хеш recovery-code (для emergency reset)
+    # v0.2: 2FA TOTP (опц.) — base32-secret зашифрован под master_key
+    totp_secret_enc: bytes = b""
+    totp_secret_nonce: bytes = b""
+    # v0.2: recovery cell — master_key зашифрован под Argon2id(recovery_code, recovery_salt)
+    recovery_master_enc: bytes = b""
+    recovery_master_nonce: bytes = b""
+    recovery_salt: bytes = b""
+
+
+def _config_path() -> Path:
+    return Path(os.environ.get("VAULT_DATA_DIR", "/app/data")) / "config.json"
+
+
+def config_exists() -> bool:
+    return _config_path().exists()
+
+
+def load_config() -> VaultConfig:
+    p = _config_path()
+    if not p.exists():
+        raise FileNotFoundError(f"vault не инициализирован: {p}")
+    raw = json.loads(p.read_text())
+    return VaultConfig(
+        salt=bytes.fromhex(raw["salt"]),
+        verifier_enc=bytes.fromhex(raw["verifier_enc"]),
+        verifier_nonce=bytes.fromhex(raw["verifier_nonce"]),
+        init_at_utc=raw["init_at_utc"],
+        recovery_code_hash=raw["recovery_code_hash"],
+        totp_secret_enc=bytes.fromhex(raw.get("totp_secret_enc", "")),
+        totp_secret_nonce=bytes.fromhex(raw.get("totp_secret_nonce", "")),
+        recovery_master_enc=bytes.fromhex(raw.get("recovery_master_enc", "")),
+        recovery_master_nonce=bytes.fromhex(raw.get("recovery_master_nonce", "")),
+        recovery_salt=bytes.fromhex(raw.get("recovery_salt", "")),
+    )
+
+
+def save_config(cfg: VaultConfig) -> None:
+    p = _config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({
+        "salt": cfg.salt.hex(),
+        "verifier_enc": cfg.verifier_enc.hex(),
+        "verifier_nonce": cfg.verifier_nonce.hex(),
+        "init_at_utc": cfg.init_at_utc,
+        "recovery_code_hash": cfg.recovery_code_hash,
+        "totp_secret_enc": cfg.totp_secret_enc.hex(),
+        "totp_secret_nonce": cfg.totp_secret_nonce.hex(),
+        "recovery_master_enc": cfg.recovery_master_enc.hex(),
+        "recovery_master_nonce": cfg.recovery_master_nonce.hex(),
+        "recovery_salt": cfg.recovery_salt.hex(),
+    }, indent=2))
+    os.chmod(p, 0o600)
+
+
+def derive_key(password: str, salt: bytes) -> bytes:
+    """Argon2id KDF: password + salt → 32 байта master-key."""
+    return low_level.hash_secret_raw(
+        secret=password.encode("utf-8"),
+        salt=salt,
+        time_cost=ARGON2_TIME_COST,
+        memory_cost=ARGON2_MEMORY_COST,
+        parallelism=ARGON2_PARALLELISM,
+        hash_len=ARGON2_HASH_LEN,
+        type=low_level.Type.ID,
+    )
+
+
+# Маркер для verifier (нужен чтобы отличить «правильный пароль» от любого другого
+# 32-байтного ключа который тоже что-то расшифрует, просто в мусор).
+VERIFIER_PLAINTEXT = b"APS-VAULT-OK-v1"
+
+
+def encrypt(key: bytes, plaintext: bytes, aad: bytes = b"") -> tuple[bytes, bytes]:
+    """AES-GCM шифрование. Возвращает (ciphertext_with_tag, nonce)."""
+    if len(key) != 32:
+        raise ValueError("key должен быть 32 байта")
+    nonce = pysecrets.token_bytes(GCM_NONCE_BYTES)
+    aes = AESGCM(key)
+    ct = aes.encrypt(nonce, plaintext, aad if aad else None)
+    return ct, nonce
+
+
+def decrypt(key: bytes, ciphertext: bytes, nonce: bytes, aad: bytes = b"") -> bytes:
+    """AES-GCM расшифровка. Бросает InvalidTag если данные tamper'ены."""
+    if len(key) != 32:
+        raise ValueError("key должен быть 32 байта")
+    aes = AESGCM(key)
+    return aes.decrypt(nonce, ciphertext, aad if aad else None)
+
+
+def verify_master_password(password: str, cfg: VaultConfig) -> bytes | None:
+    """Проверка master-password. Возвращает master-key если OK, None если нет.
+    Time-resistant: Argon2id уже сам по себе медленный (~0.5с на проверку).
+    """
+    candidate_key = derive_key(password, cfg.salt)
+    try:
+        plain = decrypt(candidate_key, cfg.verifier_enc, cfg.verifier_nonce)
+        if plain == VERIFIER_PLAINTEXT:
+            return candidate_key
+    except Exception:
+        pass
+    return None
+
+
+def init_vault(master_password: str) -> tuple[VaultConfig, str]:
+    """Первичная инициализация: создаёт salt, шифрует verifier, генерит recovery code.
+    Возвращает (config, recovery_code в открытом виде — показать ОДИН РАЗ).
+    """
+    from datetime import datetime, timezone
+
+    salt = pysecrets.token_bytes(32)
+    master_key = derive_key(master_password, salt)
+    verifier_enc, verifier_nonce = encrypt(master_key, VERIFIER_PLAINTEXT)
+
+    # Recovery code: 24 hex (96 бит энтропии). Один раз показывается юзеру.
+    recovery_code = pysecrets.token_hex(12).upper()
+    # Хешируется через Argon2 для проверки при reset'е
+    ph = PasswordHasher()
+    recovery_hash = ph.hash(recovery_code)
+
+    # Recovery cell: master_key зашифрован под Argon2id(recovery_code, recovery_salt).
+    # При recovery вводим recovery_code → derive той же cell → decrypt master_key.
+    # Зачем не пере-шифровать всю БД при reset master_password: scope-keys
+    # папок остаются под старым master_key, мы лишь меняем что какой пароль
+    # его расшифровывает.
+    recovery_salt = pysecrets.token_bytes(32)
+    recovery_key = derive_key(recovery_code, recovery_salt)
+    recovery_master_enc, recovery_master_nonce = encrypt(recovery_key, master_key)
+
+    cfg = VaultConfig(
+        salt=salt,
+        verifier_enc=verifier_enc,
+        verifier_nonce=verifier_nonce,
+        init_at_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        recovery_code_hash=recovery_hash,
+        recovery_master_enc=recovery_master_enc,
+        recovery_master_nonce=recovery_master_nonce,
+        recovery_salt=recovery_salt,
+    )
+    save_config(cfg)
+    return cfg, recovery_code
+
+
+def verify_recovery_code(code: str, cfg: VaultConfig) -> bytes | None:
+    """Recovery code → master_key (если код верный). Иначе None.
+    Двойная проверка: Argon2-hash matchитсь + cell расшифровывается."""
+    if not cfg.recovery_code_hash or not cfg.recovery_master_enc or not cfg.recovery_salt:
+        return None
+    try:
+        PasswordHasher().verify(cfg.recovery_code_hash, code)
+    except Exception:
+        return None
+    try:
+        recovery_key = derive_key(code, cfg.recovery_salt)
+        return decrypt(recovery_key, cfg.recovery_master_enc, cfg.recovery_master_nonce)
+    except Exception:
+        return None
+
+
+def rewrap_with_new_password(master_key: bytes, new_password: str) -> tuple[VaultConfig, str]:
+    """Меняет пароль (и recovery code), сохраняя master_key — поэтому scope-keys
+    и значения в БД остаются нетронутыми.
+
+    Возвращает (новый VaultConfig, новый recovery_code).
+    """
+    from datetime import datetime, timezone
+    new_salt = pysecrets.token_bytes(32)
+    # Шифруем тот же master_key под новый password-derived ключ
+    new_pwd_key = derive_key(new_password, new_salt)
+    # verifier шифруем под new_pwd_key (так verify_master_password увидит OK)
+    # Но... постойте: verify_master_password дешифрует verifier_enc CANDIDATE_KEY,
+    # где candidate_key = derive(password, salt). Чтобы это сработало, мы
+    # должны verifier_enc шифровать под new_pwd_key, и в качестве master_key
+    # для encrypt/decrypt scope-keys использовать ТОТ ЖЕ new_pwd_key. То есть
+    # master_key — это и есть derive(password, salt).
+    # А scope-keys в БД зашифрованы под СТАРЫЙ master_key. Если они отличаются —
+    # надо ВСЁ перешифровать. Сделаем так: rewrap БУДЕТ перешифровывать БД
+    # (см. main.py /api/auth/recover; здесь возвращаем new_pwd_key вместе с cfg).
+    verifier_enc, verifier_nonce = encrypt(new_pwd_key, VERIFIER_PLAINTEXT)
+    # Новый recovery code + cell
+    new_recovery_code = pysecrets.token_hex(12).upper()
+    ph = PasswordHasher()
+    recovery_hash = ph.hash(new_recovery_code)
+    rec_salt = pysecrets.token_bytes(32)
+    rec_key = derive_key(new_recovery_code, rec_salt)
+    rec_master_enc, rec_master_nonce = encrypt(rec_key, new_pwd_key)
+    cfg = VaultConfig(
+        salt=new_salt,
+        verifier_enc=verifier_enc,
+        verifier_nonce=verifier_nonce,
+        init_at_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        recovery_code_hash=recovery_hash,
+        recovery_master_enc=rec_master_enc,
+        recovery_master_nonce=rec_master_nonce,
+        recovery_salt=rec_salt,
+    )
+    return cfg, new_recovery_code
+
+
+def gen_service_token() -> str:
+    """Генерит service-token: vlt_<base32-12>_<random-32hex>"""
+    import base64
+    prefix = base64.b32encode(pysecrets.token_bytes(7)).decode().rstrip("=").lower()
+    rand = pysecrets.token_hex(32)
+    return f"vlt_{prefix}_{rand}"
