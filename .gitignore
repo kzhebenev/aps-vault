@@ -1,0 +1,12 @@
+clients/node/dist/
+data/
+*.db
+*.db.bak.*
+deploy/cluster/.env
+.env
+node_modules/
+*.pyc
+__pycache__/
+.pytest_cache/
+README.md.old
+.venv/
