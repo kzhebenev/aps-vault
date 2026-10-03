@@ -1,0 +1,25 @@
+# APS Vault. Put a TLS-terminating reverse proxy in front of the frontend port;
+# the backend is reachable only from the frontend container (it proxies /api/).
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data          # the only state: vault.db + config.json — back it up
+    env_file: .env
+    environment:
+      - VAULT_DATA_DIR=/app/data
+      - VAULT_DB_PATH=/app/data/vault.db
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8086/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${VAULT_BIND:-127.0.0.1}:${VAULT_PORT:-8087}:80"
+    depends_on:
+      - backend
