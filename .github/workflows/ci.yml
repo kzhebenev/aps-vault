@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r backend/requirements-dev.txt
+      - name: version consistency
+        run: |
+          v=$(cat VERSION); grep -q "VERSION = \"$v\"" backend/main.py && grep -q "version = \"$v\"" mcp/pyproject.toml
+      - run: cd backend && python -m pytest -q
+      - run: pip-audit -r backend/requirements.txt
+  clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.22" }
+      - run: cd clients/go && gofmt -l . && go vet ./... && go test ./...
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: cd clients/java && mkdir -p /tmp/out && javac -Xlint:all -d /tmp/out src/main/java/io/apsvault/*.java src/test/java/io/apsvault/*.java && java -cp /tmp/out io.apsvault.VaultClientTest
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: cd clients/node && npm ci && npm run build && node --test test/client.test.mjsclient.test.mjs
