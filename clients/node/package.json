@@ -1,0 +1,17 @@
+{
+  "name": "@aps-vault/client",
+  "version": "0.14.0",
+  "description": "Client for the APS Vault machine API (service tokens). Node 18+, no dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": { "node": ">=18" },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
