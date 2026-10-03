@@ -1,0 +1,9 @@
+# Overrides for the throwaway e2e stack (ops/checks/e2e-stack.sh): fresh data dir, own port.
+services:
+  backend:
+    volumes:
+      - ${E2E_DATA:-/tmp/aps-vault-e2e-data}:/app/data
+    env_file: /tmp/aps-vault-e2e.env
+  frontend:
+    ports: !override
+      - "127.0.0.1:${E2E_PORT:-8189}:80"
