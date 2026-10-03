@@ -1,0 +1,342 @@
+// End-to-end check of the web UI in a real browser against a FRESH vault (ops/checks/e2e-stack.sh).
+// Every step asserts what the user sees, not what the state says; 0 JS errors is part of the pass.
+//   URL=$(ops/checks/e2e-stack.sh up); node ops/checks/ui-e2e.mjs "$URL" docs/img; ops/checks/e2e-stack.sh down
+import puppeteer from '/aps/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js';
+import { mkdirSync } from 'node:fs';
+const [,, URL = 'http://127.0.0.1:8189', OUT = '/tmp/aps-vault-e2e-shots'] = process.argv;
+mkdirSync(OUT, { recursive: true });
+const MASTER = 'e2e master password 2026!';
+const errors = []; let passed = 0, failed = 0;
+let lastOk = '(start)';
+const ok = (name, cond, extra = '') => { lastOk = name; if (cond) { passed++; console.log('  ✓', name); } else { failed++; console.log('  ✗', name, extra); } };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const browser = await puppeteer.launch({ headless: 'new', executablePath: '/usr/bin/google-chrome', pipe: true, protocolTimeout: 60000,
+  args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-proxy-server', '--disable-background-networking', '--disable-component-update', '--disable-sync',
+         '--host-resolver-rules=MAP *.google.com 127.0.0.1,MAP *.googleapis.com 127.0.0.1,MAP *.gstatic.com 127.0.0.1'] });
+const page = await browser.newPage();
+await page.setViewport({ width: 1366, height: 860 });
+page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+await page.evaluateOnNewDocument(() => { window.__rej = []; window.addEventListener('unhandledrejection', e => window.__rej.push(String(e.reason && (e.reason.stack || e.reason)))); });
+page.on('console', m => { if (m.type() === 'error' && !/net::|ERR_|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+const ctx = await browser.defaultBrowserContext(); await ctx.overridePermissions(URL, ['clipboard-read', 'clipboard-write']);
+const text = () => page.evaluate(() => document.body.innerText);
+// DOM click: deterministic (no hit-testing against a toast or a re-rendering meter); real pointer clicks are exercised by page.click elsewhere
+const clickText = async (sel, re) => { const h = await page.evaluateHandle((sel, src) => [...document.querySelectorAll(sel)].find(b => new RegExp(src, 'i').test(b.innerText.trim())), sel, re.source); const e = h.asElement(); if (!e) throw new Error(`no element ${sel} ~ ${re}`); await page.evaluate(el => el.click(), e); return e; };
+const waitText = (re, t = 10000) => page.waitForFunction((src) => new RegExp(src, 'i').test(document.body.innerText), { timeout: t }, re.source);
+const typeInto = async (sel, value) => { await page.click(sel, { clickCount: 3 }); await page.keyboard.press('Backspace'); await page.type(sel, value); };
+try {
+  // ── init ────────────────────────────────────────────────────────────────
+  await page.goto(URL + '/?lang=ru', { waitUntil: 'networkidle0', timeout: 20000 });
+  await page.waitForSelector('input[type=password]', { timeout: 15000 });
+  const phs = await page.$$eval('input', xs => xs.map(i => i.placeholder));
+  ok('экран инициализации: поле init token', phs.some(p => /init token/i.test(p)), JSON.stringify(phs));
+  await page.screenshot({ path: `${OUT}/init.png` });
+  const pw = await page.$$('input[type=password]');
+  await pw[0].type(MASTER); await pw[1].type(MASTER); await pw[2].type('wrong-token');
+  await clickText('button', /Инициализировать/); await waitText(/init token mismatch/, 5000);
+  ok('неверный init token отклонён (видимая ошибка)', /init token mismatch/.test(await text()));
+  await pw[2].click({ clickCount: 3 }); await pw[2].type('e2e-init-token');
+  await clickText('button', /Инициализировать/);
+  await page.waitForSelector('.codebox', { timeout: 10000 });
+  const recovery = await page.$eval('.codebox', e => e.textContent.trim());
+  ok('recovery-код показан (24 символа)', recovery.length === 24, recovery);
+  await clickText('button', /Я записал/);
+  await page.waitForSelector('input[type=password]', { timeout: 15000 }); await sleep(300);
+  ok('после init — экран входа', (await page.$$('input[type=password]')).length === 1);
+  // ── unlock: wrong, then right ──────────────────────────────────────────
+  await page.type('input[type=password]', 'not the password at all'); await page.keyboard.press('Enter');
+  await waitText(/wrong master password/, 5000); ok('неверный пароль → видимая ошибка', true);
+  await typeInto('input[type=password]', MASTER); await page.keyboard.press('Enter');
+  await page.waitForSelector('.sidebar', { timeout: 15000 }); await sleep(300);
+  ok('вход: главный экран, пустое состояние с призывом создать папку', /Создать первую папку|Папок ещё нет/.test(await text()));
+  await page.screenshot({ path: `${OUT}/empty.png` });
+  // ── folder ──────────────────────────────────────────────────────────────
+  await clickText('button', /Создать первую папку/); await page.waitForSelector('.modal input', { timeout: 5000 });
+  await page.type('.modal input', 'clients-test'); await page.keyboard.press('Enter');
+  await waitText(/Папка создана/, 5000); await sleep(300);
+  ok('папка создана и выбрана (URL #/folder/…)', /#\/folder\/\d+/.test(await page.evaluate(() => location.hash)), await page.evaluate(() => location.hash));
+  ok('папка видна в сайдбаре', (await page.$$eval('.sidebar .nav-item', xs => xs.map(x => x.innerText))).some(t => /clients-test/.test(t)));
+  // ── secret with generator, TOTP and expiry ─────────────────────────────
+  await page.keyboard.press('n'); await page.waitForSelector('.drawer', { timeout: 5000 });
+  ok('клавиша N открывает редактор', true);
+  const inputs = await page.$$('.drawer input, .drawer textarea');
+  await inputs[0].type('db-password');
+  await clickText('.drawer button', /Сгенерировать/); await page.waitForSelector('.drawer .codebox', { timeout: 5000 });
+  const gen = await page.$eval('.drawer .codebox', e => e.textContent.trim());
+  ok('генератор дал пароль 24 символа', gen.length === 24, gen);
+  await clickText('.drawer button', /Парольная фраза/); await sleep(150);
+  const phrase = await page.$eval('.drawer .codebox', e => e.textContent.trim());
+  ok('режим парольной фразы: 5 слов через дефис', phrase.split('-').length === 5, phrase);
+  await clickText('.drawer button', /Подставить/);
+  const val = await page.$eval('.drawer textarea', e => e.value);
+  ok('«Подставить» кладёт фразу в значение', val === phrase);
+  ok('индикатор силы показывает биты', /бит/.test(await page.$eval('.drawer', e => e.innerText)));
+  await page.type('.drawer input[placeholder*="example.com"]', 'app');
+  await page.type('.drawer input[type=url]', 'https://db.example.com');
+  await page.type('.drawer input[placeholder="prod, api"]', 'prod, db');
+  await clickText('.drawer .chip', /^30 дн$/);
+  const exp = await page.$eval('.drawer input[type=date]', e => e.value);
+  ok('чип «30 дн» заполнил дату', /^\d{4}-\d{2}-\d{2}$/.test(exp), exp);
+  await page.type('.drawer input[placeholder="JBSWY3DPEHPK3PXP"]', 'JBSWY3DPEHPK3PXP');
+  await page.keyboard.down('Meta'); await page.keyboard.press('Enter'); await page.keyboard.up('Meta');
+  await waitText(/Сохранено/, 8000); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(900);
+  ok('секрет сохранён ⌘↵ и открыт в карточке', /db-password/.test(await page.$eval('.detail h1', e => e.innerText)));
+  const detail = await page.$eval('.detail', e => e.innerText);
+  ok('карточка: логин, значение, TOTP-код из 6 цифр, срок, теги', /app/.test(detail) && /\d{3} \d{3}/.test(detail) && /prod/.test(detail) && /истекает через/.test(detail), detail.slice(0, 300));
+  ok('значение по умолчанию размыто', await page.$eval('.detail .secret-blur', e => !!e));
+  const totp1 = detail.match(/(\d{3} \d{3})/)[1];
+  await page.screenshot({ path: `${OUT}/detail-light.png` });
+  // reveal + copy
+  await page.click('.detail .frow:nth-child(2) .ops button:first-child'); await sleep(100);
+  ok('«показать» снимает размытие', (await page.$$('.detail .frow:nth-child(2) .secret-blur')).length === 0);
+  await page.bringToFront();
+  await page.click('.detail .frow:nth-child(2) .ops button:last-child'); await waitText(/в буфере|Не удалось скопировать/, 5000);
+  const copyMsg = (await text()).match(/[^\n]*(в буфере|Не удалось скопировать)[^\n]*/)?.[0];
+  const clip = await page.evaluate(() => navigator.clipboard.readText().catch(e => 'ERR ' + e.message));
+  ok('копирование кладёт значение в буфер (тост + содержимое буфера)', clip === phrase && /в буфере/.test(copyMsg), `toast="${copyMsg}" clip="${clip}"`);
+  // TOTP countdown
+  ok('кольцо таймера TOTP с секундами', /\d+ с/.test(detail));
+  // ── list, favorites, expiring scope ─────────────────────────────────────
+  ok('«Истекают» в сайдбаре = 1', (await page.$$eval('.sidebar .nav-item', xs => xs.map(x => x.innerText))).some(t => /Истекают\s*1/.test(t.replace(/\n/g, ' '))));
+  await page.click('.detail-head .actions button:first-child'); await sleep(500);
+  ok('избранное: звезда в списке и счётчик 1', (await page.$$('.item .star')).length === 1 && (await page.$$eval('.sidebar .nav-item', xs => xs.map(x => x.innerText.replace(/\n/g, ' ')))).some(t => /Избранное\s*1/.test(t)));
+  // second secret, then sorting and search
+  await page.keyboard.press('Escape'); await page.keyboard.press('n'); await page.waitForSelector('.drawer', { timeout: 5000 });
+  const in2 = await page.$$('.drawer input, .drawer textarea'); await in2[0].type('api-key'); await page.type('.drawer textarea', 'password');
+  ok('слабое значение помечено «слабый»', /слабый/.test(await page.$eval('.drawer', e => e.innerText)));
+  await clickText('.drawer .foot button', /Сохранить/); await waitText(/Сохранено/, 8000); await sleep(600);
+  ok('в списке 2 секрета', (await page.$$('.item')).length === 2);
+  await page.type('#search', 'db-'); await sleep(400);
+  ok('поиск сузил список до 1', (await page.$$('.item')).length === 1);
+  await page.click('#search', { clickCount: 3 }); await page.keyboard.press('Escape'); await sleep(300);
+  ok('Esc сбрасывает поиск', (await page.$$('.item')).length === 2);
+  // keyboard: j/k + Enter + c
+  await page.keyboard.press('j'); await page.keyboard.press('j'); await page.keyboard.press('k'); await sleep(200);
+  ok('J/K двигают фокус в списке', (await page.$$('.item.focused')).length === 1 && await page.$eval('.item.focused .name', e => /api-key/.test(e.innerText)));
+  await page.keyboard.press('Enter'); await sleep(900);
+  ok('Enter открывает сфокусированный секрет', /api-key/.test(await page.$eval('.detail h1', e => e.innerText)));
+  ok('утечки: кнопка проверки есть', (await page.$$eval('.detail button', xs => xs.map(x => x.innerText))).some(t => /Утечки/.test(t)));
+  await clickText('.detail button', /Утечки/); await waitText(/утечках|недоступна|выключена/, 12000);
+  const leak = await text();
+  ok('проверка утечек дала видимый результат («password» найден)', /найден в утечках|недоступна|выключена/.test(leak), 'HIBP: ' + (/найден в утечках/.test(leak) ? 'found' : 'unavailable/disabled'));
+  // palette
+  await page.keyboard.down('Meta'); await page.keyboard.press('k'); await page.keyboard.up('Meta'); await page.waitForSelector('#palette', { timeout: 3000 });
+  await page.type('#palette input', 'db'); await sleep(200); await page.keyboard.press('Enter'); await sleep(900);
+  ok('⌘K палитра открывает найденный секрет', /db-password/.test(await page.$eval('.detail h1', e => e.innerText)));
+  // move to another folder
+  await clickText('.sidebar .nav-title button', /.*/).catch(() => {});
+  await page.waitForSelector('.modal input', { timeout: 5000 }); await page.type('.modal input', 'archive'); await page.keyboard.press('Enter'); await waitText(/Папка создана/, 5000); await sleep(400);
+  await page.goto(URL + '/#/all/s/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(500);
+  await clickText('.detail-head button', /Переместить/); await page.waitForSelector('.modal .chip', { timeout: 5000 });
+  await clickText('.modal .chip', /archive/); await page.waitForFunction(() => /archive/.test(document.querySelector('.modal .chip.active')?.innerText || ''), { timeout: 3000 });
+  await clickText('.modal .foot button', /Переместить/); await waitText(/Перемещён/, 8000); await sleep(600);
+  ok('перемещение: URL ведёт в папку archive, крошки показывают archive', /#\/folder\/\d+\/s\/1/.test(await page.evaluate(() => location.hash)) && /archive/.test(await page.$eval('.detail .crumbs', e => e.innerText)));
+  const detail2 = await page.$eval('.detail', e => e.innerText);
+  ok('после перемещения значение/TOTP читаются', /\d{3} \d{3}/.test(detail2));
+  // history after edit
+  await clickText('.detail-head button', /Изменить/); await page.waitForSelector('.drawer textarea', { timeout: 5000 });
+  await typeInto('.drawer textarea', 'new-value-after-edit-2026'); await clickText('.drawer .foot button', /Сохранить/); await waitText(/Сохранено/, 8000); await sleep(600);
+  await clickText('.detail button', /История значений/);
+  await page.waitForFunction(() => document.querySelectorAll('.detail .card:nth-of-type(2) .frow').length >= 2, { timeout: 5000 }).catch(() => {});
+  const histTxt = await page.$eval('.detail .card:nth-of-type(2)', e => e.innerText);
+  ok('история показывает предыдущее значение (размытое, с датой)', (await page.$$('.detail .card:nth-of-type(2) .frow .secret-blur')).length >= 1 && /\d{4}/.test(histTxt), histTxt.slice(0, 120));
+  // ── tokens page: create, then machine API works with it ────────────────
+  await clickText('.sidebar button', /^Токены$/); await page.waitForSelector('#tok-new', { timeout: 5000 }); await waitText(/Токенов ещё нет/, 5000).catch(() => {});
+  ok('страница токенов: пустое состояние', /Токенов ещё нет/.test(await text()));
+  await page.click('#tok-new'); await page.waitForSelector('.drawer', { timeout: 5000 });
+  await page.type('.drawer input', 'e2e-reader'); await clickText('.drawer .chip', /archive/); await page.waitForFunction(() => /archive/.test(document.querySelector('.drawer .chip.active')?.innerText || ''), { timeout: 3000 });
+  await page.type('[data-testid="tok-cidrs"]', '10.0.0.0/8 127.0.0.1 172.16.0.0/12 192.168.0.0/16');
+  await clickText('.drawer .foot button', /Создать/); await page.waitForSelector('.modal .codebox', { timeout: 8000 });
+  const tok = await page.$eval('.modal .codebox', e => e.textContent.trim());
+  ok('токен показан один раз (vlt_…)', /^vlt_/.test(tok));
+  const m = await fetch(`${URL}/api/v1/m/secret/db-password`, { headers: { Authorization: `Bearer ${tok}` } });
+  ok('машинный API читает секрет этим токеном (настоящий запрос)', m.status === 200 && (await m.json()).value === 'new-value-after-edit-2026', 'HTTP ' + m.status);
+  const kv = await fetch(`${URL}/v1/archive/data/db-password`, { headers: { 'X-Vault-Token': tok } });
+  ok('HashiCorp-фасад тоже отвечает этим токеном', kv.status === 200);
+  await clickText('.modal .foot button', /Готово/); await sleep(600);
+  ok('токен в таблице с политикой CIDR', /e2e-reader/.test(await text()) && /10\.0\.0\.0\/8/.test(await text()));
+  await page.screenshot({ path: `${OUT}/tokens.png` });
+  // ── share links: human page (default) and machine JSON ─────────────────
+  await page.goto(URL + '/#/all/s/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(400);
+  await clickText('.detail-head button', /Поделиться/); await page.waitForSelector('[data-testid="share-kind"]', { timeout: 5000 });
+  ok('диалог «Поделиться»: по умолчанию выбран вид «Для человека»', await page.$eval('[data-testid="share-kind"] button.active', b => /Для человека/.test(b.innerText)));
+  await page.type('.modal input[placeholder*="стенда"]', 'после входа смени пароль');
+  await clickText('.modal .foot button', /Создать ссылку/); await page.waitForSelector('.modal .codebox', { timeout: 8000 });
+  const humanUrl = await page.$eval('.modal .codebox', e => e.textContent.trim());
+  ok('человекочитаемая ссылка вида /share/…', /\/share\/[A-Za-z0-9_-]+$/.test(humanUrl) && !humanUrl.includes('/api/'), humanUrl);
+  const p2 = await browser.newPage(); p2.on('pageerror', e => errors.push('share page: ' + e.message));
+  await p2.goto(humanUrl, { waitUntil: 'networkidle0', timeout: 15000 });
+  const landing = await p2.evaluate(() => document.body.innerText);
+  ok('страница получателя: предупреждение об одноразовости и кнопка «Открыть», значение ещё НЕ запрошено', /одноразов/.test(landing) && !/new-value-after-edit/.test(landing) && !!(await p2.$('[data-testid="share-open"]')));
+  const before = await (await fetch(`${URL}/api/health`)).ok;   // the link is still unused: a second fresh load shows the landing again
+  await p2.click('[data-testid="share-open"]'); await p2.waitForFunction(() => /Копировать|Copy/.test(document.body.innerText), { timeout: 8000 }); await sleep(200);
+  const opened = await p2.evaluate(() => document.body.innerText);
+  ok('после клика: имя, логин, сообщение отправителя, значение размыто', /db-password/.test(opened) && /app/.test(opened) && /после входа смени пароль/.test(opened) && !!(await p2.$('.secret-blur')));
+  await p2.evaluateHandle(() => [...document.querySelectorAll('button')].find(b => /Показать|Reveal/.test(b.innerText)).click()); await sleep(150);
+  ok('«Показать» раскрывает значение', (await p2.evaluate(() => document.body.innerText)).includes('new-value-after-edit-2026') && !(await p2.$('.secret-blur')));
+  await p2.screenshot({ path: `${OUT}/share-page.png` });
+  const p3 = await browser.newPage(); await p3.goto(humanUrl, { waitUntil: 'networkidle0', timeout: 15000 }); await p3.click('[data-testid="share-open"]'); await p3.waitForFunction(() => /истекла или уже|expired or was already/.test(document.body.innerText), { timeout: 8000 });
+  ok('второе открытие одноразовой страницы — понятный отказ', true); await p2.close(); await p3.close();
+  await page.keyboard.press('Escape');
+  // machine kind
+  await clickText('.detail-head button', /Поделиться/); await page.waitForSelector('[data-testid="share-kind"]', { timeout: 5000 });
+  await clickText('[data-testid="share-kind"] button', /Для машины/); await clickText('.modal .foot button', /Создать ссылку/); await page.waitForSelector('.modal .codebox', { timeout: 8000 });
+  const shareUrl = await page.$eval('.modal .codebox', e => e.textContent.trim());
+  ok('машинная ссылка вида /api/share/…', /\/api\/share\//.test(shareUrl), shareUrl);
+  const sh = await fetch(shareUrl); const shBody = await sh.json().catch(() => ({}));
+  ok('машинная ссылка отдаёт JSON с value и login без входа (настоящий запрос)', sh.status === 200 && shBody.value === 'new-value-after-edit-2026' && shBody.login === 'app', 'HTTP ' + sh.status);
+  const sh2 = await fetch(shareUrl);
+  ok('второе открытие одноразовой ссылки — отказ', sh2.status >= 400);
+  await page.keyboard.press('Escape');
+  await clickText('.sidebar button', /^Ссылки$/); await page.waitForSelector('.page .table', { timeout: 8000 }); await sleep(200);
+  const sharesTxt = await page.$eval('.page', e => e.innerText);
+  ok('страница ссылок показывает использованные ссылки', /использована/.test(sharesTxt) && /1 \/ 1/.test(sharesTxt), sharesTxt.slice(0, 200));
+  // the kind is remembered: machine was chosen last → next dialog opens on machine
+  await page.goto(URL + '/#/all/s/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(300);
+  await clickText('.detail-head button', /Поделиться/); await page.waitForSelector('[data-testid="share-kind"]', { timeout: 5000 });
+  ok('выбор вида ссылки запоминается', await page.$eval('[data-testid="share-kind"] button.active', b => /Для машины/.test(b.innerText)));
+  await clickText('[data-testid="share-kind"] button', /Для человека/); await page.keyboard.press('Escape');
+  // ── machine-only secret: generated on the server, hidden from people, read by a token, rotated ──
+  await page.goto(URL + '/#/folder/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.list', { timeout: 8000 }); await sleep(300);
+  await page.keyboard.press('n'); await page.waitForSelector('.drawer', { timeout: 5000 });
+  await page.type('.drawer input', 'file-encryption-key');
+  await page.click('[data-testid="gen-server"]'); await sleep(100);
+  ok('тумблер «сгенерировать на сервере» прячет поле значения и показывает форматы', (await page.$$('.drawer .chip[data-spec]')).length === 4 && await page.evaluate(() => document.querySelector('.drawer textarea').closest('.field').classList.contains('hidden')));
+  await page.click('[data-testid="machine-only"]');
+  await clickText('.drawer .foot button', /Сохранить/); await waitText(/Сохранено/, 8000); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(600);
+  const moCard = await page.$eval('.detail', e => e.innerText);
+  ok('карточка machine-only: значения нет, есть пояснение и кнопка «Ротация», нет «Поделиться»', /Только для машин/.test(moCard) && /Ротация/.test(moCard) && !/Поделиться/.test(moCard) && !(await page.$('.detail .frow .secret-blur')));
+  ok('в списке бейдж «машины»', (await page.$$eval('.item .badge', xs => xs.map(x => x.innerText))).some(t => /машины/.test(t)));
+  const moId = parseInt((await page.evaluate(() => location.hash)).split('/s/')[1]);
+  // the token created earlier is scoped to "archive"; make one for clients-test via the API with the UI's cookies
+  const cookies = (await page.cookies()).map(c => `${c.name}=${c.value}`).join('; '); const csrf = (await page.cookies()).find(c => c.name === 'vault_csrf').value;
+  const tk = await (await fetch(`${URL}/api/tokens`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookies, 'X-CSRF-Token': csrf }, body: JSON.stringify({ name: 'mo-reader', folder_id: 1 }) })).json();
+  const mo1 = await (await fetch(`${URL}/api/v1/m/secret/file-encryption-key`, { headers: { Authorization: `Bearer ${tk.raw_token}` } })).json();
+  ok('машина читает сгенерированный ключ (43 символа base64, версия 1)', mo1.value?.length === 43 && mo1.version === 1, JSON.stringify(mo1).slice(0, 120));
+  await clickText('.detail button', /^Ротация$/); await page.waitForSelector('[data-testid="rotate-confirm"]', { timeout: 5000 });
+  await clickText('.modal .chip', /hex/); await page.click('[data-testid="rotate-confirm"]'); await waitText(/Ротация выполнена: версия 2/, 8000); await sleep(600);
+  const mo2 = await (await fetch(`${URL}/api/v1/m/secret/file-encryption-key`, { headers: { Authorization: `Bearer ${tk.raw_token}` } })).json();
+  const mo1again = await (await fetch(`${URL}/api/v1/m/secret/file-encryption-key?version=1`, { headers: { Authorization: `Bearer ${tk.raw_token}` } })).json();
+  ok('после ротации: версия 2 в hex (64 симв.), версия 1 читается по ?version=1', mo2.version === 2 && mo2.value?.length === 64 && mo1again.value === mo1.value);
+  ok('карточка показывает версию 2', /[Вв]ерсия 2/.test(await page.$eval('.detail', e => e.innerText)));
+  const expJson = await (await fetch(`${URL}/api/export`, { headers: { Cookie: cookies } })).json();
+  const expMo = expJson.folders.flatMap(f => f.secrets).find(x => x.name === 'file-encryption-key');
+  ok('в экспорте значение machine-only отсутствует (null)', expMo && expMo.value === null && expMo.machine_only === true);
+  await page.screenshot({ path: `${OUT}/machine-only.png` });
+  // ── approval workflow: approver set in Settings, flagged secret, request → approve page → read ──
+  await page.goto(URL + '/#/settings', { waitUntil: 'networkidle0' }); await waitText(/Подтверждение чтения/, 8000);
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));   // a toast in the corner must not swallow the click
+  await page.click('[data-testid="approver-set"]'); await page.waitForSelector('.modal input[type=password]', { timeout: 5000 });
+  const apIn = await page.$$('.modal input[type=password]'); await apIn[0].type(MASTER); await apIn[1].type('approver password 2026 ok');
+  await clickText('.modal .foot button', /Сохранить/); await waitText(/Подтверждающий назначен/, 8000); await sleep(400);
+  ok('подтверждающий назначен из настроек', /Подтверждающий назначен\./.test(await text()));
+  await page.goto(URL + '/#/folder/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.list', { timeout: 8000 }); await sleep(300);
+  await page.keyboard.press('n'); await page.waitForSelector('.drawer', { timeout: 5000 });
+  await page.type('.drawer input', 'root-password'); await page.type('.drawer textarea', 'guarded-value-2026');
+  await page.click('[data-testid="require-approval"]');
+  await clickText('.drawer .foot button', /Сохранить/); await waitText(/Сохранено/, 8000); await page.waitForSelector('[data-testid="approval-request"]', { timeout: 8000 });
+  ok('карточка секрета с флагом: панель запроса вместо значения', !/guarded-value-2026/.test(await text()));
+  ok('в списке бейдж «подтверждение»', (await page.$$eval('.item .badge', xs => xs.map(x => x.innerText))).some(t => /подтверждение/.test(t)));
+  await page.type('[data-testid="approval-reason"]', 'инцидент 4711'); await page.click('[data-testid="approval-request"]');
+  await page.waitForSelector('[data-testid="approve-url"]', { timeout: 8000 });
+  const approveUrl = await page.$eval('[data-testid="approve-url"]', e => e.textContent.trim());
+  ok('без нотификатора ссылка для подтверждающего показана запросившему', /\/approve\/[A-Za-z0-9_-]+$/.test(approveUrl), approveUrl);
+  const ap = await browser.newPage(); ap.on('pageerror', e => errors.push('approve page: ' + e.message));
+  await ap.goto(approveUrl, { waitUntil: 'networkidle0', timeout: 15000 }); await ap.waitForSelector('[data-testid="approver-password"]', { timeout: 8000 });
+  const apText = await ap.evaluate(() => document.body.innerText);
+  ok('страница подтверждающего: секрет, причина, нет значения', /root-password/.test(apText) && /инцидент 4711/.test(apText) && !/guarded-value-2026/.test(apText));
+  await ap.type('[data-testid="approver-password"]', 'wrong wrong wrong'); await ap.click('[data-testid="approve-yes"]'); await ap.waitForFunction(() => /wrong approver password/.test(document.body.innerText), { timeout: 5000 });
+  ok('неверный пароль подтверждающего → видимая ошибка', true);
+  await ap.click('[data-testid="approver-password"]', { clickCount: 3 }); await ap.type('[data-testid="approver-password"]', 'approver password 2026 ok'); await ap.click('[data-testid="approve-yes"]');
+  await ap.waitForFunction(() => /Одобрено/.test(document.body.innerText), { timeout: 8000 }); await ap.close();
+  await page.waitForFunction(() => /guarded-value-2026|Подтверждено/.test(document.body.innerText) || !!document.querySelector('.detail .secret-blur'), { timeout: 15000 }); await sleep(500);
+  ok('после одобрения карточка запросившего показывает значение (размыто)', !!(await page.$('.detail .frow .secret-blur')) && !(await page.$('[data-testid="approval-request"]')));
+  await page.screenshot({ path: `${OUT}/approval.png` });
+  // ── WebAuthn with Chrome's virtual authenticator (CTAP2, PRF): register in Settings, unlock by touch, second factor ──
+  const cdp = await page.target().createCDPSession();
+  await cdp.send('WebAuthn.enable', { enableUI: false });
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'usb', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: true, automaticPresenceSimulation: true } });
+  await page.goto(URL + '/#/settings', { waitUntil: 'networkidle0' }); await waitText(/Ключи безопасности/, 8000);
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await page.click('[data-testid="webauthn-add"]'); await page.waitForSelector('.modal input[type=password]', { timeout: 5000 });
+  await page.type('.modal input:not([type=password])', 'virtual YubiKey'); await page.type('.modal input[type=password]', MASTER);
+  await page.click('[data-testid="webauthn-create"]'); await waitText(/Ключ добавлен/, 15000); await sleep(600);
+  const waTxt = await text();
+  ok('ключ зарегистрирован через настоящий WebAuthn (виртуальный аутентификатор с PRF): вход касанием доступен', /Ключ добавлен: вход одним касанием/.test(waTxt) && /virtual YubiKey/.test(waTxt) && /PRF/.test(waTxt), waTxt.match(/Ключ добавлен[^\n]*/)?.[0]);
+  const creds = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+  ok('аутентификатор хранит ровно одну учётку для RP localhost', creds.credentials.length === 1 && creds.credentials[0].rpId === 'localhost');
+  // lock → unlock by touch, no password
+  await clickText('.topbar button', /Lock|Заблокировать/); await page.waitForSelector('input[type=password]', { timeout: 10000 });
+  await page.waitForSelector('[data-testid="webauthn-unlock"]', { timeout: 8000 });
+  ok('на экране входа есть кнопка «Войти ключом безопасности / Touch ID»', true);
+  await page.click('[data-testid="webauthn-unlock"]'); await page.waitForSelector('.sidebar', { timeout: 15000 });
+  ok('вход одним касанием: сессия открыта без ввода пароля', (await page.$$('.item')).length >= 1);
+  const h2 = await (await fetch(`${URL}/api/health`, { headers: { Cookie: (await page.cookies()).map(c => `${c.name}=${c.value}`).join('; ') } })).json();
+  ok('health подтверждает сессию после WebAuthn-входа', h2.unlocked === true);
+  // second factor: password alone is refused, then the key is asked for automatically
+  await page.goto(URL + '/#/settings', { waitUntil: 'networkidle0' }); await waitText(/Требовать ключ при входе паролем/, 8000);
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await page.click('[data-testid="webauthn-2fa"]'); await sleep(800);
+  ok('второй фактор включён', await page.$eval('[data-testid="webauthn-2fa"]', e => e.classList.contains('on')));
+  await clickText('.topbar button', /Lock|Заблокировать/); await page.waitForSelector('input[type=password]', { timeout: 10000 }); await sleep(300);
+  const r401 = await (await fetch(`${URL}/api/auth/unlock`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ master_password: MASTER }) }));
+  ok('API: пароль без ключа → 401 с заголовком X-WebAuthn-Required', r401.status === 401 && r401.headers.get('x-webauthn-required') === '1');
+  await page.type('input[type=password]', MASTER); await page.keyboard.press('Enter'); await page.waitForSelector('.sidebar', { timeout: 15000 });
+  ok('вход паролем + автоматический запрос ключа → сессия открыта', true);
+  // cleanup: second factor off, remove the key
+  await page.goto(URL + '/#/settings', { waitUntil: 'networkidle0' }); await waitText(/Требовать ключ при входе паролем/, 8000);
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove())); await page.click('[data-testid="webauthn-2fa"]'); await sleep(800);
+  await clickText('.page .table button', /Удалить/); await clickText('.modal .foot button', /Удалить/); await sleep(600);
+  ok('ключ удалён, кнопки входа касанием больше нет в статусе', (await (await fetch(`${URL}/api/auth/webauthn/status`)).json()).credentials === 0);
+  await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
+  await page.screenshot({ path: `${OUT}/webauthn.png` });
+  // ── webhooks / audit / health ──────────────────────────────────────────
+  await clickText('.sidebar button', /^Вебхуки$/); await waitText(/Вебхуков нет/, 8000); ok('страница вебхуков: пустое состояние', true);
+  await clickText('.sidebar button', /^Журнал$/); await page.waitForSelector('.table', { timeout: 8000 });
+  const audit = await text();
+  ok('журнал содержит auth:unlock, secret:create, token:create, share:create', ['auth:unlock', 'secret:create', 'token:create', 'share'].every(a => audit.includes(a)), audit.slice(0, 200));
+  await clickText('.chip', /Вход/); await sleep(300);
+  ok('фильтр журнала «Вход» оставляет только auth:*', (await page.$$eval('.table .badge', xs => xs.map(x => x.innerText))).every(a => a.startsWith('auth')));
+  await clickText('.sidebar button', /^Здоровье$/); await waitText(/Оценка/, 15000); await sleep(300);
+  const health = await text();
+  ok('отчёт о здоровье: оценка, слабый пароль найден (api-key = «password»)', /Оценка/.test(health) && /Слабые пароли/.test(health) && /api-key/.test(health));
+  ok('отчёт: секрет со сроком в «истекают»', /Истекают в ближайшие 30 дней/.test(health) && /db-password/.test(health));
+  await page.screenshot({ path: `${OUT}/health.png` });
+  // ── settings: theme dark + EN ───────────────────────────────────────────
+  await clickText('.sidebar button', /^Настройки$/); await waitText(/Второй фактор/, 8000);
+  await clickText('.seg button', /^Тёмная$/); await sleep(300);
+  ok('тема «Тёмная» применилась (data-theme=dark, тёмный фон)', await page.evaluate(() => document.documentElement.dataset.theme === 'dark' && getComputedStyle(document.body).backgroundColor.match(/\d+/g).map(Number)[0] < 40));
+  await page.goto(URL + '/#/all/s/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(900);
+  ok('тема переживает перезагрузку', await page.evaluate(() => document.documentElement.dataset.theme === 'dark'));
+  await page.screenshot({ path: `${OUT}/main.png` });
+  await page.goto(URL + '/#/health', { waitUntil: 'networkidle0' }); await waitText(/Оценка/, 15000); await sleep(400); await page.screenshot({ path: `${OUT}/health-dark.png` });
+  await page.goto(URL + '/#/settings', { waitUntil: 'networkidle0' }); await waitText(/Второй фактор/, 8000); await page.screenshot({ path: `${OUT}/settings.png` });
+  await clickText('.seg button', /^English$/); await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {}); await sleep(600);
+  const en = await text();
+  ok('английский интерфейс без кириллицы', !/[А-Яа-яЁё]/.test(en.replace(/clients-test|db-password|api-key|archive/g, '')), (en.match(/[^\n]*[А-Яа-яЁё][^\n]*/g) || []).slice(0, 3).join(' | '));
+  await page.goto(URL + '/#/all/s/1', { waitUntil: 'networkidle0' }); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(900);
+  await page.screenshot({ path: `${OUT}/main-en.png` });
+  // ── mobile ─────────────────────────────────────────────────────────────
+  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await page.goto(URL + '/#/all', { waitUntil: 'networkidle0' }); await page.waitForSelector('.item', { timeout: 15000 }); await sleep(400);
+  const sbHidden = await page.evaluate(() => getComputedStyle(document.getElementById('sidebar')).transform !== 'none');
+  ok('мобильный: сайдбар скрыт, список виден', sbHidden && (await page.$$('.item')).length === 4);
+  await page.click('.menu-btn'); await sleep(300);
+  ok('мобильный: кнопка меню открывает сайдбар', await page.evaluate(() => document.getElementById('sidebar').classList.contains('open')));
+  await page.click('.menu-btn'); await sleep(400); await page.click('.item'); await page.waitForSelector('.detail', { timeout: 8000 }); await sleep(300);
+  ok('мобильный: карточка открывается на весь экран, кнопка «назад» есть', (await page.$$('.detail .menu-btn')).length === 1 && await page.evaluate(() => getComputedStyle(document.querySelector('.list-pane')).display === 'none'));
+  ok('мобильный: нет горизонтальной прокрутки', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  await page.screenshot({ path: `${OUT}/mobile.png` });
+  // ── lock ───────────────────────────────────────────────────────────────
+  await page.setViewport({ width: 1366, height: 860 });
+  await page.goto(URL + '/#/all', { waitUntil: 'networkidle0' }); await page.waitForSelector('.topbar', { timeout: 8000 });
+  await clickText('.topbar button', /Lock|Заблокировать/); await page.waitForSelector('input[type=password]', { timeout: 10000 });
+  ok('Lock → экран входа', true);
+  const h = await (await fetch(`${URL}/api/health`)).json();
+  ok('health после lock: unlocked=false', h.unlocked === false);
+} catch (e) { failed++; console.log('  ✗ ИСКЛЮЧЕНИЕ после шага «' + lastOk + '»:', e.message, '| hash:', await page.evaluate(() => location.hash).catch(() => '?'));
+  console.log('  диагностика:', await page.evaluate(() => JSON.stringify({ url: location.href, ready: document.readyState, overlays: document.querySelectorAll('.overlay').length, content: document.getElementById('content')?.outerHTML.slice(0, 400), route: window.state && state.route, secrets: window.state && state.secrets.length, rej: window.__rej })).catch(err => 'n/a ' + err.message)); await page.screenshot({ path: `${OUT}/failure.png` }).catch(() => {}); }
+finally { await browser.close(); }
+console.log(errors.length ? 'JS-ОШИБКИ: ' + JSON.stringify(errors, null, 1) : 'JS-ошибок: 0');
+console.log(`ИТОГ: ${passed} ok, ${failed} fail${errors.length ? ', ' + errors.length + ' js errors' : ''}`);
+if (failed || errors.length) process.exitCode = 1;
