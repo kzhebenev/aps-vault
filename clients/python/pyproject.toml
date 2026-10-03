@@ -1,0 +1,18 @@
+[project]
+name = "aps-vault"
+version = "0.17.0"
+description = "Client for APS Vault machine API (service tokens), standard library only"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+sealed = ["cryptography>=42"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["aps_vault*"]
