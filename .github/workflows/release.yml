@@ -1,0 +1,176 @@
+# Release pipeline (0.28): runs on a version tag. Everything that can be published without a stored
+# secret is — GitHub Release with assets, SBOMs and Sigstore signatures, container images on ghcr.io,
+# PyPI and npm through OIDC "trusted publishing" (no tokens anywhere). Maven Central needs the two
+# Sonatype secrets and a GPG key (docs/PUBLISHING.md); that job is skipped until they exist.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write        # the GitHub Release
+  id-token: write        # OIDC for PyPI / npm trusted publishing and Sigstore keyless signing
+  packages: write        # ghcr.io
+  attestations: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  verify:
+    name: tag matches VERSION, tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          v=$(cat VERSION); tag=${GITHUB_REF_NAME#v}
+          [ "$v" = "$tag" ] || { echo "tag v$tag does not match VERSION $v"; exit 1; }
+          grep -q "VERSION = \"$v\"" backend/main.py
+          grep -q "version = \"$v\"" clients/python/pyproject.toml
+          grep -q "\"version\": \"$v\"" clients/node/package.json
+          grep -q "<version>$v</version>" clients/java/pom.xml
+          grep -q "const Version = \"$v\"" clients/go/vault.go
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install -r backend/requirements-dev.txt
+      - run: cd backend && python -m pytest -q
+
+  python:
+    name: PyPI (trusted publishing)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install build twine
+      - run: cd clients/python && python -m build && twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with: { name: python-dist, path: clients/python/dist/* }
+      # Publishes only when PyPI knows this repository as a trusted publisher (docs/PUBLISHING.md §1);
+      # until then the step fails and the rest of the release still happens.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        continue-on-error: true
+        with: { packages-dir: clients/python/dist/, print-hash: true }
+
+  node:
+    name: npm (trusted publishing, provenance)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+      - run: npm install -g npm@latest        # OIDC trusted publishing needs npm ≥ 11.5
+      - run: cd clients/node && npm ci && npm run build && node --test test/client.test.mjs
+      - run: cd clients/node && npm pack && mv ./*.tgz ../../aps-vault-client-node.tgz
+      - uses: actions/upload-artifact@v4
+        with: { name: node-dist, path: aps-vault-client-node.tgz }
+      # Publishes only when the npm package has this workflow as a trusted publisher (docs/PUBLISHING.md §2).
+      - run: cd clients/node && npm publish --provenance --access public
+        continue-on-error: true
+
+  java:
+    name: Maven Central
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      HAS_CENTRAL: ${{ secrets.CENTRAL_USERNAME != '' }}     # secrets are not allowed in a step `if`; an env flag is
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+      - run: cd clients/java && mvn -B -q package
+      - uses: actions/upload-artifact@v4
+        with: { name: java-dist, path: clients/java/target/*.jar }
+      # Deploys only when the Sonatype Central token and the GPG key are in the repository secrets (docs/PUBLISHING.md §3).
+      - if: env.HAS_CENTRAL == 'true'
+        run: cd clients/java && mvn -B -P release deploy
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+  images:
+    name: container images → ghcr.io (signed)
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: sigstore/cosign-installer@v3
+      - name: backend
+        id: backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:${{ needs.verify.outputs.version }}
+            ghcr.io/${{ github.repository }}/backend:latest
+      - name: frontend
+        id: frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:${{ needs.verify.outputs.version }}
+            ghcr.io/${{ github.repository }}/frontend:latest
+      - name: sign images (Sigstore keyless, identity = this workflow)
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository }}/backend@${{ steps.backend.outputs.digest }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/frontend@${{ steps.frontend.outputs.digest }}
+      - name: SBOM of the images
+        uses: anchore/sbom-action@v0
+        with: { image: "ghcr.io/${{ github.repository }}/backend@${{ steps.backend.outputs.digest }}", format: spdx-json, output-file: sbom-backend-image.spdx.json, upload-artifact: false }
+      - uses: actions/upload-artifact@v4
+        with: { name: image-sbom, path: sbom-backend-image.spdx.json }
+
+  release:
+    name: GitHub Release — assets, SBOM, signatures
+    needs: [verify, python, node, java, images]
+    # a registry that is not set up yet must not cost us the Release: run as long as the tag verified
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { path: dist }
+      - run: mkdir -p dist
+      - name: source SBOM (backend, clients)
+        uses: anchore/sbom-action@v0
+        with: { path: ., format: spdx-json, output-file: dist/sbom-source.spdx.json, upload-artifact: false }
+      - uses: sigstore/cosign-installer@v3
+      - name: sign every asset (Sigstore keyless; verify with cosign verify-blob — SECURITY.md)
+        run: |
+          cd dist && find . -type f ! -name '*.sigstore.json' | while read -r f; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+          find . -type f | sort
+      - name: release notes from CHANGELOG
+        run: |
+          v=${{ needs.verify.outputs.version }}
+          awk -v v="## $v" '$0==v{p=1;next} /^## /{if(p)exit} p' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $v" > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            dist/**/*
+            clients/fixtures/*.json
