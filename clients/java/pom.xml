@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <!-- Maven Central namespace: io.github.<github user> is verified automatically through the GitHub login
+       at central.sonatype.com (docs/PUBLISHING.md §3). The Java package stays io.apsvault. -->
+  <groupId>io.github.kzhebenev</groupId>
+  <artifactId>aps-vault-client</artifactId>
+  <version>0.29.0</version>
+  <packaging>jar</packaging>
+  <name>APS Vault client</name>
+  <description>Client for the APS Vault machine API (service tokens): sealed delivery (X25519, GOST, P-256, X25519+ML-KEM-768), node enrolment, caching. Java 11+, no dependencies.</description>
+  <url>https://github.com/kzhebenev/aps-vault/tree/main/clients/java</url>
+  <licenses>
+    <license>
+      <name>MIT</name>
+      <url>https://opensource.org/licenses/MIT</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Konstantin Zhebenev</name>
+      <url>https://github.com/kzhebenev</url>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/kzhebenev/aps-vault.git</connection>
+    <developerConnection>scm:git:git@github.com:kzhebenev/aps-vault.git</developerConnection>
+    <url>https://github.com/kzhebenev/aps-vault</url>
+    <tag>v0.29.0</tag>
+  </scm>
+  <properties>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions><execution><id>attach-sources</id><goals><goal>jar-no-fork</goal></goals></execution></executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.11.2</version>
+        <configuration><doclint>none</doclint><failOnError>false</failOnError></configuration>
+        <executions><execution><id>attach-javadocs</id><goals><goal>jar</goal></goals></execution></executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!-- `mvn -P release deploy`: GPG-signed artifacts to Maven Central through the Central Publisher Portal.
+       Credentials come from the Maven server `central` (CENTRAL_USERNAME / CENTRAL_PASSWORD — a portal user
+       token, not the account password) and the GPG key in the runner's keyring (docs/PUBLISHING.md §3). -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+                <configuration>
+                  <gpgArguments><arg>--pinentry-mode</arg><arg>loopback</arg></gpgArguments>
+                  <passphraseEnvName>GPG_PASSPHRASE</passphraseEnvName>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.8.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>
