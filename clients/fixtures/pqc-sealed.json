@@ -1,0 +1,45 @@
+{
+  "note": "Server-produced hybrid envelope (backend/sealed.py seal_pqc): X25519 + ML-KEM-768 (FIPS 203). Private key = X25519 sk (32) ‖ ML-KEM seed d‖z (64) = 96 bytes; public = X25519 pk (32) ‖ ML-KEM ek (1184) = 1216 bytes. key = HKDF-SHA256(ikm = ss_x25519 ‖ ss_mlkem, salt = none, info = hkdf_info_prefix ‖ epk ‖ kem); AES-256-GCM, AAD = secret name. A port must (1) derive public_b64 from private_b64 and (2) open both envelopes; (3) a flipped byte in kem, epk, ct or the name must fail.",
+  "alg": "X25519MLKEM768-HKDF-SHA256-AES256GCM",
+  "hkdf_info_prefix": "aps-vault/sealed-pqc/v1",
+  "keypair": {
+    "private_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5f",
+    "public_b64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9/AsrhtHHzHN85dySCZtU811DbDeoaZVJ+2Fl73MmCYWUfeZTPYl24odFinES93Q28eVp7CCFJW+3Q+B4nEHBpBo2iVo8xAYov7wIZxCgBKUFXPyDcPfCoIvDuUllASmh4KYWvOCQfNcobgUpqk40xsmSTcW4oe0nVgAVxljHkIlFkGmFmuIBOUNXbKe1T+WwzteYeMJiWqd5sRyF6SayrRonNvVxD+xosdALcvo8RPg4jeRp+BuEYTG1DmBw+G1iCg+mzWxmV0jBvBarfGBYed8zZd5DUoEgmgkmpCSSYxXE0fqpr42D2fZTSqQhaQxEK2lpQukKS3pkOE2bMzrLBZ3DAc4R+dEZxLCY+OzDkDog3pcq5Y+D0tCwa4cz0ArMG+EHKHE86VDMB+ux5T2gRM5Jnzhi9n2gdlE3896k3sEcOfMQgoZoTHvGIrwASmvL4ZJk4QLCOuEMg/wilmwJa7ViJMd3ASxQljUwqMSEvtALGyBrn7VwOtenGIhcnhQxr0NlFmYp0WQAGONKYolH/2mYvbxEJaIndHx4jk+bMTm6DONLvD5XY0uXVvJ3DukCcVimnViHdB46dG9StAFmGFUn+v0yJqPCtRmS9lQcW3Sssx4InrlcL3UC7Ko81BYzldooyPKyfYG0jCeMC5wwyjDEhLcL87MkFtVrI0U8iM4HqtnKn/EWTNoYCuuJ6Y+ZT584Sa8pDLIZRBdzurWlKu3GWydUrhxsp24E0nwoDHlcYpqES085AchbxJhzcieVf6zJM3VLAko41CqzoxSLNWicQrg3C1YCGohBpjISnyZhzsvJDKt1vrlGzUZoorQmRghVCe9aLRDEvp8GCXHFWiabta11LaeXmrDC+2axiuCglhxLxtYbEg1ZwXRyHldGHlEZq9pV/XIqX2+cV+skp0WnKN/GX8GJxKa7MRAySndGQWi3GyWoBl8UE3ULcdNbJfqalqK64o/AJ7gEioKc3lAnkJLBJ5YwW2FRQgaLmYXHy4k19aW6cNc7iFkshmzA2FLEOkO0G2jDXRs1iOtSTrMyfh2HVxbD7G5obUarLOIH32xF6jmnBdsgJxhrigp801HILcMxZRFyaEZKUMdUhYYsNN5C4mFc23AxXbY7woJFN6oKkmspyBTHLX1FD0goi8t7qdK2HkuYRqBxeFI8ZbNBAX6kniV5sDkGGJ3DjBNHMVtwu76Z+tjFHHt7BIinN/davxyMnjZAQjtZujBgEjZkVLvFrXRcu5+hrrxx6stHCVtV+yNHQwxrxS9VRLQblWxisk+cJoAAmoYU45AyYpGiYSclZ/lkwpS5Ng0Ixx1gM5N3EGTMEYBZySUAECKp2dRWe096npbFSBozy6UKaROEFJs4bm+BFikQZcwo0MejCAd7uHEC8IhUJ12T9FfKQtS3MmtyGyhQYTG3E4o4fWJjaglRGTU37Hk3vUGnKSFB444MS+uh9HYnaEQXSloJucJa/rmzbleh3gFJpdBqb9sEJoMpGWa7xKGZAKxHl4BmTsRH5iaBgnySaTQrn1908oSVwx3Fs3g1NuFkp9Won7CWT6hNgVafGiwb1X0jPdWwJzNpcfrw==",
+    "x25519_sk_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "mlkem_seed_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+  },
+  "envelopes": [
+    {
+      "name": "core-db",
+      "payload": {
+        "value": "pg-pass-2026",
+        "login": "core",
+        "notes": "hybrid fixture",
+        "version": 7
+      },
+      "sealed": {
+        "alg": "X25519MLKEM768-HKDF-SHA256-AES256GCM",
+        "v": 1,
+        "epk": "yhxkOK3QHUt+NMoLcVmUZh+y9ecXzIuyBZDvYXhDiGA=",
+        "kem": "q7do77+wqwd/aM/Ils9BI3F7CA7a36JovR+/uslRDuoDpKTkOknP2nRBtmUG+q5hGboMH0dna22AfKAT+ruTF39JWU/15N+jc36pMsCIR9LMrHzii+NOjIRgNRpRD+YxhfsqSQjVbpmz9s+106jPksvY0ijuO3Lfra33uI3NJBGjuU4SayXA2BJZV4eWPSPEaeCSzOfrkGHD68VMb+78fswYTrr1XAMJt6EvudrrYLoyFVoKWpp0UoF9d2Sp+y9w24MGX4vRDiYCahL2oH3v4NV/+QM+29XCbferj1lJIOVBbNzPYrbcNlT8n6/dDpmBUssaD5ZH6VecAa2bLWDRc84hL2k7Ax1PJpl/Ejvyq0IZYOiUPQDy90tgnRoN8gp+BPAoM3QkzgPV8lHFGf3DtXzK46WvKlApkuN3DU+xafq5sdOnHlYTfcKpXsg0RdBXtGH2sue+Ka6LDWWfVE8JyRTAuEzGfsPJ6Tnv34ouJOF+kDF4+bGLEhyxoWABdrXoU8J8wV052Bm3I8ghUIEZMiPA/mKEJuoN7b7bEAeVdCa+uYIqnTqz6z6X+SB7WQ/RBo995DkyDKKkvc0+EIHEwIq5vteFcDHXPDLOSR0RQ6s03E2uhYXbn5AzgS6bGQMdyvcbpAoreUJtyj/xf74zBpoHKlzsw7xprOn+9YOvwquFE6llJDOC9xCRBkYzZoXduwMWMcIY4SBz1lS5HRXWxvcoxeyBrhTya0QTNTUlTTTW8WywAQsGwhjruCZbF6nGlEuM0VNq5rfa4zBp9CGpEOKBS500YNXxiq+kPAB0hZj0mzimWFQAnCqWVeWfNOX0bchYr1tLq0+OSS31DNFQoLeZDeAKds9nH581yZLFo4ISzQcC4lk6hIpcYD1hsLs/gA6naEgw7gYtBRLilkjO/E+zkhHYuQEy72lFn7BkO34QHRkUqoKWYEu9+gsfFR0sBLgPF2fC4jUI1y5N/yB5XyHrfpATtvDTB3//LvJCRb1EK0todE8HP2mGyw2fzxkeRlHnu/0oLhFz3eBquufdanMtJdkdFtGnlexZlFCWfVzQpbjn8fWBrx4MzHH7PZKlZeYUyQvVpcuKsvdzkaD+dBFwxnS2vM2xQ9+zmH+aoi/C+qrP9fG8vtdqgjTvCxlTz2J3Sv3WnpUXYW31ArhEsdxXoD9Wnptjndgevnu1FlB2ZKs4RvJbMyf3FBUDka7+Jf7DuoyQh2WcBY9qqaqkNkJeiFPtxIQ6/RVTEvloVM+vdSE0RQCYtNNEAznlwJ4aQ1aD9dXzcEsLbzt+unBog05OLpwHz4D3bcNKPbGGr7Wa4WiQcd/QayGIlDaFzFeDOENDWDxxB4lkCcRWZHrA/t0Ps0pb3Ukon5/AI26J16geEkP4rb7AUYvn1nBvbsb9LWzQ3263MwhmbqCYLkd9DjM6Qtb0KKHVVNEed3lxvxU=",
+        "nonce": "6v0TFzxGoID1cSjH",
+        "ct": "8THFqyMyLeVbVf0bYzTdzEP8kzbbA1+QvjwNvvY3/90l+S/DqP0emA7O64aolB4IqsGZBwsqIV3lA+ScSu58Ff3/MDZbIjlfXQgJTkpDrxddbQVEb24ErZhe4Wc="
+      }
+    },
+    {
+      "name": "кириллица/путь",
+      "payload": {
+        "value": "значение №2 ✓",
+        "login": "svc"
+      },
+      "sealed": {
+        "alg": "X25519MLKEM768-HKDF-SHA256-AES256GCM",
+        "v": 1,
+        "epk": "hGPI1EZiCYy8/5XEuY1nTubsrnWBXJFIFxbmOcaNKwE=",
+        "kem": "ZA0xdyxKeIaQpXvmJJR1GtjOm3m/G0BgHuVI35Zc1u0IS3JjS4RAevMyQ4kPd9HnL60jBSxNMsxNhK1qPkdWAAQb4GuaEg0RHq/XTx2x5eBiHpn9QBUFr7n1GyzysFoPPRvSl22lQna/aNRAlUPRA8UU2bWefFIdAqvvdoc7CfHs1dKlWioEhFvSzfWaD1OFDASeZLbi2zugDeOIlTi/BUZy4nYADmGfhtQCTJMlfd5T0NBibc5/MraCNhOehVP+RZPfK8euzgQZA7nm/S/9K0qYbU616QQkhk5tqbOJ5C+L9lscNcFrOmHdl4Cc02YiU2W5Df9R5KgynPQry+P+YPZqs77JfJlmXo3F1sR12opnQojeg1UgoD7zAkk/6OX/jK5XOQ+GYcbY09luvxcndeI6IVP/WKwaw7RUzXooP/0uieKYBU8vwFPSIwRdV0eErz1z6W338iPk+E6ZEIFX5Ss4/y0/81g3pzpGlMplw8zgyALjOk2DUkcE5b8CbP9zGsTKR3zX4PeY73GqRE9i8kqTC6yEGRRg7CVsnF3sGYSt7AXCotIgogTeSdeP1/ut3D11344Fe0FGzqmlDo5p740lySz/U/JszqPny7n9rkp1L8UsHAiG+wNc1VLSs3sR6j4tBiA7qldKwusOSlrcRY3XA41wl+MAiBYqkAEy64AGvFFaEI1Zx3mmxhrDVwrcq/AxAtc0SQkscTP0MqK8er7TtWAG6foZN7RfxZNRzjk+LFlmh2IDZR9xmdAi2EYSJEpi5C/1CljFOfHFYI5t/HRl22HFQ/OGnIfFIvB2Y03LOhJgmdrdn04IZJT4Fu9DFBpiqUpGTyHDKPIaGM0kXnyxDP1y9DmcUwE+XciOZbUyOc1poxk7qOZmXjee8Nda7KnJLU8PA8pauZQ79nvJQuy1H5kHI/1o0Bn7Z/S7D62GLOZqzoe9jDxJMo2SYXoeP28HPvtz7Wl7/5RmyIMqEGBHZ08aTqzHljHxN3vw2ATrm+MY1SniFXYwc6Y9VdSdXuRxKC7yCUteqV0/vjpW17vbFBSb0+ybW2IZezPjcfmwfWcD1F4Io4ChJD6NcX9vMxq4WgBLu7516VI+nuO8UXQ1CJgLgRVjaBtJhTsC/1OF5U6Ijl84SOovSdQ+FJu9hx39bGNNkpLxpvRw0l3dsIx5sWGW7fNZRxeXKlBUmRbP2cuE6ItP+DYVexF1JyxuDOex8Pprhqsu36H+st1WpgOjXhuNPIgOeGxAdnZdKSpp8QwfQikat+hkfYx4d3eupf6NRsXmlukW6p+SxfHM+x+LIJKhQFdT6xhqJyDOgsrSaSINOOtC3whA1kbYo6Mz6u99ZNDtckcNUmR5SYyCVoNDAGKymdAG6QRJ/xTVPgyG+DHIoX1Si9cJ/qKURXepyIPInBEWCJF8bqxmyjkOtH2KhrNhod7s0BiXU8Hbab4=",
+        "nonce": "OlikMBZF8KXjCMWG",
+        "ct": "xYKWMvGBCL1fKDQhVf/cp5m21Fau9Ix1mmLP+n1u64FmasWcH4HNtRr9od/Zeo9yreBPNszJ2tOE9hoUuEHmJlcbjQ=="
+      }
+    }
+  ]
+}

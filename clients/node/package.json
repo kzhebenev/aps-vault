@@ -1,0 +1,25 @@
+{
+  "name": "@aps-vault/client",
+  "version": "0.27.0",
+  "description": "Client for the APS Vault machine API (service tokens). Node 20.19+; one dependency (@noble/post-quantum) for the X25519+ML-KEM-768 sealed envelope.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.7.1"
+  }
+}
