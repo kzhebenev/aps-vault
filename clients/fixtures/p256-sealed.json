@@ -1,0 +1,23 @@
+{
+ "note": "Server-produced P-256 envelope (backend/sealed.py seal_p256) for the private scalar 0x01..0x20; every client must open it.",
+ "keypair": {
+  "private_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+  "public_b64": "BFFcPW6545a5BNP+yn9U/c0MwemXvzddylFa0KbDtANfRTa+OlDzGPv5pUdZAqIhUCvvDVfgjFOyzApW8X2fk1Q="
+ },
+ "envelope": {
+  "name": "core-db",
+  "payload": {
+   "value": "pg-pass-2026",
+   "login": "core",
+   "totp": "123456"
+  },
+  "sealed": {
+   "alg": "P256-HKDF-SHA256-AES256GCM",
+   "v": 1,
+   "epk": "BB9G4wg15AmpvdUfnJ/8eSI7O5s7Yt32xkCQFCMPbBaTFYiuDcYv3P7MKnc+KLIZEhDCLHaPBtXzuQ8LEub1Ggk=",
+   "nonce": "QgrzIZrxBVaIrZy5",
+   "ct": "8ppL7c7Y+UHpfPd6bmWHVfy6l0+cVSMAZFFY3UZlRtGL5+PO1hL/VLHCxte6zlrtorsOMv2lMnhwYC8Ha71+a/qsSKNmtEI="
+  }
+ },
+ "hkdf_info_prefix": "aps-vault/sealed-p256/v1"
+}
