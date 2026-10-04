@@ -1,0 +1,50 @@
+{
+  "name": "@aps-vault/client",
+  "version": "0.31.1",
+  "description": "Client for the APS Vault machine API (service tokens). Node 20.19+; one dependency (@noble/post-quantum) for the X25519+ML-KEM-768 sealed envelope.",
+  "license": "MIT",
+  "author": "Konstantin Zhebenev",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kzhebenev/aps-vault.git",
+    "directory": "clients/node"
+  },
+  "homepage": "https://github.com/kzhebenev/aps-vault/tree/main/clients/node",
+  "bugs": {
+    "url": "https://github.com/kzhebenev/aps-vault/issues"
+  },
+  "keywords": [
+    "secrets",
+    "vault",
+    "secret-manager",
+    "service-token",
+    "sealed-delivery",
+    "gost",
+    "ml-kem",
+    "post-quantum"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.4.0"
+  }
+}
