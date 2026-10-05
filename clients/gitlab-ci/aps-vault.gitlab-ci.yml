@@ -1,0 +1,59 @@
+# APS Vault → GitLab CI (0.34). Include this file and set two CI/CD variables on the project or group:
+#   VAULT_URL    https://vault.example.com
+#   VAULT_TOKEN  vlt_…   (masked, protected — a folder-scoped service token)
+# Optional: VAULT_CLIENT_KEY (sealed tokens), APS_VAULT_VERSION (which release's script to fetch; default below).
+#
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/kzhebenev/aps-vault/v0.41.0/clients/gitlab-ci/aps-vault.gitlab-ci.yml'
+#
+# Two ways to use it:
+#
+# 1) in the job itself — extend .aps-vault-secrets and list the secrets; they are exported into the job's shell
+#    deploy:
+#      extends: .aps-vault-secrets
+#      variables: { APS_VAULT_SECRETS: "db-password:DB_PASSWORD db-password.login:DB_USER api-key" }
+#      script: [ ./deploy.sh ]          # DB_PASSWORD, DB_USER, API_KEY are set
+#
+# 2) one job fetches, later jobs inherit — the aps-vault-secrets job writes a dotenv artifact
+#    include the stage name below in your `stages:` and add `needs: [aps-vault-secrets]` to the consumers.
+#
+# GitLab masks only variables it created itself: the values are NOT masked in job logs, so never echo them.
+# Item syntax: name[.field][:ENV] — field = value | login | notes | totp; ENV defaults to UPPER_SNAKE_CASE.
+
+variables:
+  APS_VAULT_VERSION: "v0.41.0"
+  APS_VAULT_CI_URL: "https://raw.githubusercontent.com/kzhebenev/aps-vault/${APS_VAULT_VERSION}/clients/ci/aps-vault-ci.py"
+  # 0.37: the script runs next to VAULT_TOKEN — it is checked against this digest, so a moved tag or a tampered
+  # download is refused (tests/test_ci_fetch.py keeps the digest equal to the file in this release)
+  APS_VAULT_CI_SHA256: "285bcb0bd0e9784c19b2f9c39f833896e4a499fccaedf950305cedef716afce4"
+
+.aps-vault-fetch-script: &aps_vault_fetch
+  - 'command -v python3 >/dev/null || { echo "aps-vault: python3 is required in the job image"; exit 2; }'   # quoted: the colon
+  - if [ -z "${APS_VAULT_CI_SCRIPT:-}" ]; then curl -fsSL --retry 3 "$APS_VAULT_CI_URL" -o /tmp/aps-vault-ci.py && APS_VAULT_CI_SCRIPT=/tmp/aps-vault-ci.py; fi
+  - 'python3 -c "import hashlib,os,sys; d=hashlib.sha256(open(os.environ[\"APS_VAULT_CI_SCRIPT\"],\"rb\").read()).hexdigest(); sys.exit(0 if not os.environ.get(\"APS_VAULT_CI_SHA256\") or d==os.environ[\"APS_VAULT_CI_SHA256\"] else \"aps-vault: script digest mismatch — refusing to run it\")"'
+  - '[ -n "${VAULT_CLIENT_KEY:-}" ] && (python3 -c "import cryptography" 2>/dev/null || python3 -m pip install -q cryptography==50.0.2 kyber-py==1.2.0) || true'
+
+# Way 1: secrets become shell variables of the extending job (before_script runs first).
+.aps-vault-secrets:
+  before_script:
+    - *aps_vault_fetch
+    - eval "$(python3 "$APS_VAULT_CI_SCRIPT" --export $APS_VAULT_SECRETS)"
+
+# Way 2: a dedicated job produces a dotenv artifact that later jobs receive as variables.
+aps-vault-secrets:
+  stage: .pre
+  image: python:3.12-alpine
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add --no-cache curl >/dev/null
+  script:
+    - *aps_vault_fetch
+    - python3 "$APS_VAULT_CI_SCRIPT" --dotenv aps-vault.env $APS_VAULT_SECRETS
+  artifacts:
+    reports:
+      dotenv: aps-vault.env
+    access: none            # 0.37: GitLab ≥ 16.11 — the values must not be downloadable from the job page / API
+    expire_in: 1 hour
+  rules:
+    - if: $APS_VAULT_SECRETS
