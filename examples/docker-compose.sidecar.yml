@@ -1,0 +1,42 @@
+# Vault next to an application on one host. The app reaches the vault over the private
+# compose network by service name; only the vault UI is published, on localhost, for the
+# administrator (put TLS in front if it must be reachable from elsewhere).
+services:
+  vault-backend:
+    build: ../backend
+    restart: unless-stopped
+    volumes:
+      - vault-data:/app/data
+    env_file: ../.env
+    environment:
+      - VAULT_DATA_DIR=/app/data
+      - VAULT_DB_PATH=/app/data/vault.db
+    user: "10001:10001"
+
+  vault-frontend:
+    build: ../frontend
+    restart: unless-stopped
+    environment:
+      - VAULT_BACKEND_URL=http://vault-backend:8086   # the frontend's nginx proxies /api/ here
+    ports:
+      - "127.0.0.1:8087:80"
+    depends_on: [vault-backend]
+
+  app:
+    image: your/app:latest
+    restart: unless-stopped
+    environment:
+      - VAULT_URL=http://vault-frontend        # frontend proxies /api/ to the backend
+      - VAULT_TOKEN_FILE=/run/secrets/vault_token
+    secrets:
+      - vault_token
+    depends_on: [vault-frontend]
+    # or, without code changes:
+    # entrypoint: ["/with-secrets.sh", "db-password:DB_PASSWORD", "--", "/app/start"]
+
+secrets:
+  vault_token:
+    file: ./vault_token      # vlt_… issued in the vault UI for the app's folder, mode 0600
+
+volumes:
+  vault-data:
