@@ -1,0 +1,38 @@
+# Rendered by the nginx image at start (envsubst over /etc/nginx/templates/*.template).
+# VAULT_BACKEND_URL — where the backend answers; default http://backend:8086 (compose service name).
+server {
+    listen 80;
+    server_tokens off;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $vault_backend "${VAULT_BACKEND_URL}";
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    # 0.37: security headers for the UI document and its scripts (they used to exist only on API responses, where a
+    # browser does not use them): CSP script-src 'self' (no inline script), no framing (clickjacking of approve /
+    # share pages and the UI), no MIME sniffing. The API responses carry the backend's own copies.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    }
+    # Everything the backend serves: human + machine API, Prometheus, HashiCorp KV v2 facade.
+    location ~ ^/(api/|metrics$|v1/) {
+        proxy_pass $vault_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 0.37: a client may not set the certificate fingerprint itself; pass it on only when VAULT_PASS_CERT_FINGERPRINT=1
+        # (an outer TLS proxy that verified the client certificate sets it)
+        set $vault_cert_fp "";
+        set $vault_pass_fp "${VAULT_PASS_CERT_FINGERPRINT}";
+        if ($vault_pass_fp = "1") { set $vault_cert_fp $http_x_client_cert_fingerprint; }
+        proxy_set_header X-Client-Cert-Fingerprint $vault_cert_fp;
+        client_max_body_size 25m;               # imports up to 20 MB (importers.MAX_BYTES); nginx's default 1 MB refused them
+    }
+}
