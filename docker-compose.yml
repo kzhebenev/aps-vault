@@ -1,0 +1,39 @@
+# APS Vault. Put a TLS-terminating reverse proxy in front of the frontend port;
+# the backend is reachable only from the frontend container (it proxies /api/).
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data          # the only state: vault.db + config.json — back it up
+    env_file: .env
+    environment:
+      - VAULT_DATA_DIR=/app/data
+      - VAULT_DB_PATH=/app/data/vault.db
+    # 0.37: no extra privileges for a process that holds the master key in memory
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8086/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${VAULT_BIND:-127.0.0.1}:${VAULT_PORT:-8087}:80"
+    depends_on:
+      - backend
+    environment:
+      # 0.37: 1 = pass the client-certificate fingerprint header set by YOUR TLS proxy; 0 = clear it (cannot be forged)
+      - VAULT_PASS_CERT_FINGERPRINT=${VAULT_PASS_CERT_FINGERPRINT:-0}
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]   # nginx master: bind :80, drop to the nginx user
+    healthcheck:   # 0.30.1: a dead nginx is visible to compose and to the host that embeds the vault
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

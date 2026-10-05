@@ -1,0 +1,47 @@
+{
+  "note": "Server-produced GOST hybrid envelope (backend/sealed.py seal_gost_pqc): VKO GOST R 34.10-2012 (paramSetB) + ML-KEM-768. Private key = GOST scalar big-endian (32) ‖ ML-KEM seed d‖z (64) = 96 bytes; public = GOST point X‖Y little-endian (64) ‖ ML-KEM ek (1184) = 1248 bytes. KEK = VKO(d_eph, client_gost_pk, ukm); ss_kem = ML-KEM-768.Decaps; key = KDF_TREE_GOSTR3411_2012_256(K = KEK ‖ ss_kem (64 bytes), label, seed = epk ‖ kem, 1 key); Kuznyechik-MGM, AAD = secret name. A port must (1) derive public_b64 from private_b64 and (2) open both envelopes; (3) a flipped byte in kem, epk, ukm, ct or the name must fail.",
+  "alg": "VKO-GOSTR3410-2012-256-MLKEM768-KDFTREE-KUZNYECHIK-MGM",
+  "kdf_label": "aps-vault/sealed-gost-pqc/v1",
+  "keypair": {
+    "private_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5f",
+    "public_b64": "G3vutJn919Pz9inCvkxdAyG2VJiJxJnDsIL3omnvNaqIJgzI/wViHw8JM1xmFusAbBnQ7vSkLwm34XNmKhqc/8c3zl3JIJm1TzXUNsN6hplUn7YWXvcyYJhZR95lM9iXbih0WKcRL3dDbx5WnsIIUlb7dD4HicQcGkGjaJWjzEBii/vAhnEKAEpQVc/INw98Kgi8O5SWUBKaHgpha84JB81yhuBSmqTjTGyZJNxbih7SdWABXGWMeQiUWQaYWa4gE5Q1dsp7VP5bDO15h4wmJap3mxHIXpJrKtGic29XEP7Gix0Aty+jxE+DiN5Gn4G4RhMbUOYHD4bWIKD6bNbGZXSMG8Fqt8YFh53zNl3kNSgSCaCSakJJJjFcTR+qmvjYPZ9lNKpCFpDEQraWlC6QpLemQ4TZszOssFncMBzhH50RnEsJj47MOQOiDelyrlj4PS0LBrhzPQCswb4QcocTzpUMwH67HlPaBEzkmfOGL2faB2UTfz3qTewRw58xCChmhMe8YivABKa8vhkmThAsI64QyD/CKWbAlrtWIkx3cBLFCWNTCoxIS+0AsbIGuftXA616cYiFyeFDGvQ2UWZinRZAAY40piiUf/aZi9vEQloid0fHiOT5sxOboM40u8PldjS5dW8ncO6QJxWKadWId0Hjp0b1K0AWYYVSf6/TImo8K1GZL2VBxbdKyzHgieuVwvdQLsqjzUFjOV2ijI8rJ9gbSMJ4wLnDDKMMSEtwvzsyQW1WsjRTyIzgeq2cqf8RZM2hgK64npj5lPnzhJrykMshlEF3O6taUq7cZbJ1SuHGynbgTSfCgMeVximoRLTzkByFvEmHNyJ5V/rMkzdUsCSjjUKrOjFIs1aJxCuDcLVgIaiEGmMhKfJmHOy8kMq3W+uUbNRmiitCZGCFUJ71otEMS+nwYJccVaJpu1rXUtp5easML7ZrGK4KCWHEvG1hsSDVnBdHIeV0YeURmr2lX9cipfb5xX6ySnRaco38ZfwYnEprsxEDJKd0ZBaLcbJagGXxQTdQtx01sl+pqWorrij8AnuASKgpzeUCeQksEnljBbYVFCBouZhcfLiTX1pbpw1zuIWSyGbMDYUsQ6Q7QbaMNdGzWI61JOszJ+HYdXFsPsbmhtRqss4gffbEXqOacF2yAnGGuKCnzTUcgtwzFlEXJoRkpQx1SFhiw03kLiYVzbcDFdtjvCgkU3qgqSaynIFMctfUUPSCiLy3up0rYeS5hGoHF4Ujxls0EBfqSeJXmwOQYYncOME0cxW3C7vpn62MUce3sEiKc391q/HIyeNkBCO1m6MGASNmRUu8WtdFy7n6GuvHHqy0cJW1X7I0dDDGvFL1VEtBuVbGKyT5wmgACahhTjkDJikaJhJyVn+WTClLk2DQjHHWAzk3cQZMwRgFnJJQAQIqnZ1FZ7T3qelsVIGjPLpQppE4QUmzhub4EWKRBlzCjQx6MIB3u4cQLwiFQnXZP0V8pC1Lcya3IbKFBhMbcTijh9YmNqCVEZNTfseTe9QacpIUHjjgxL66H0didoRBdKWgm5wlr+ubNuV6HeAUml0Gpv2wQmgykZZrvEoZkArEeXgGZOxEfmJoGCfJJpNCufX3TyhJXDHcWzeDU24WSn1aifsJZPqE2BVp8aLBvVfSM91bAnM2lx+v",
+    "gost_sk_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "mlkem_seed_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+  },
+  "envelopes": [
+    {
+      "name": "core-db",
+      "payload": {
+        "value": "pg-pass-2026",
+        "login": "core",
+        "notes": "hybrid fixture",
+        "version": 7
+      },
+      "sealed": {
+        "alg": "VKO-GOSTR3410-2012-256-MLKEM768-KDFTREE-KUZNYECHIK-MGM",
+        "v": 1,
+        "epk": "IGEV7hiY3yYbhTSQ1gNyi9Ahg32w2uLf0Ojyd3CbrfighQzl35p9bWLYcnWbOsXWxMGZ8gPnLHXQB4Q1RlLqJA==",
+        "ukm": "Bdurk09cDTE=",
+        "kem": "pWQ1jAWj1y8k4/EfTyQEcX6CXyiqPp4YlEGZyFyAgSh/9mfmHtSzNImGxFH3u5h8xUcc9RXpHyVSCIDVGGtR0Tjh6G4mEXoZ+H4YvJss1NKFD6ioELnXD57WJmQ/lkeV39KC5loqQxeKO5jWgta9Na9eN1mFLMUnAZ0O4jVkZsCMaksS7S9tXctpo/IYbg4GQXPlLcDufVQ7mGPAo841hjVc+g9RdX5dgv+UjYphVSUZ9Hr4ZTujFmPCiEvzSZ/MC2mIcSXcDZDvUzobgWcSjaJYQix9KfMq2KSkLhAvTBwRkcxIEKPmy+2c5FvpaJ0PfwoGpjMGBN/SYDRAgb181utXWHVvsVPGQ1MEkZMANM6OPD+dc5QmiqZRt7Ony2/CKG94Skq38Gu5W/ezdcyj73V//O3JM8pMo386Qu5JUwmbw1Hrvtle1uucpqQ3R33N3LDTAdgDD4kZPNjTOJSUPMeCEAYi08YoolEeO0gLa+LYBgVbEFXjLADSgugwTifFGjkKy5uRmG1a6PjM/vTe4E5d+0GHCQDWXw9s0Do4k6IfBeilRG74ROa7MCtCkxgYRL1p9VJUmEbLob1Rnwj1r+pPXYMInwfPVKuIYrzf0AD5Fl/dyEisj7pE1XdlM3juZHR1UOyabg05S7/pmZLKQEsmRHZ7cO38a29v405X1Fsg3rPThBvCkyMdq43yVzD8sBZpIrWiXbhf3r6wHxqdkRW8ptncIOvsGN6HNJwKWrcxuKTJQumitaW3Vy7wYdO+ke9oZQcb/bAZSp9C27y6ecb/EqgR4W3+zE7c+CA90bsg/R4AOgyGDalHToRgd/51MR0V6P3q2aG5CD7iu4KmvAhQh/bBLhGxWmefglcRSB196QZHUaRCPvQ3xC/upzupwvagooa8OJOcycX56o975J1AeOcPAS5qWo8bI1T30xHFsATBzbnaKwuORUcditcgmC3tIjfgdfV6PuGI9unW2Dmr/N6or+37ZJUbjA+m1x+QuoX1nxrnvpa5HQC9d8ktoxOejPG16f+AQZQ9BseQ8oa7OTkVwRWV/R2Ab//ALZLj1oA1asihmEBt8I6HpbFRg+XMSfOsgefsij+Vt9aBOp7Vh85tuK7vVO7p+pp99b+ATbJJ9hfWlRjjqpvzrKCCifEpYxTjEAwKYsWhEDxYTR2r4WHw8RiOua0mZPyVB2r7Ii3PFwCnd2nTqrf90Jpnh2RJP7IJxb2FQgjI0npHsw1/FdeKVncXtEo0fyQy9HWIsdtYuHz7+XikJyaKHR+vqsInKhE8isK7xKvc8agEBoDNU7ecRJwia9jgmsMTB39Gr3Rs2uMIEpOxQh7CUjV0gaicPGm242Qolp+3MoEV9W0dUf+FyBn17EA0uWCP9ENnlKSTcbsxl86KJmx139Wt4WWRpR55ZmzR5NXRNi1oMZSf2fsSfdWu86kC4ilNvYI=",
+        "nonce": "OU5l++rn/ZoJtGWwRP4+lg==",
+        "ct": "Xp6QD+Z9EHKdqn4PKDmtK18C7c5bSbEjv4e3N5BKDvjzm5n8s3jaJaQvDwyatixz0AVWj/LY3vYcxg005Gy5UToz12gcMlBdtKaZu4rHol3W4p843dmK73am3ZE="
+      }
+    },
+    {
+      "name": "кириллица/путь",
+      "payload": {
+        "value": "значение №2 ✓",
+        "login": "svc"
+      },
+      "sealed": {
+        "alg": "VKO-GOSTR3410-2012-256-MLKEM768-KDFTREE-KUZNYECHIK-MGM",
+        "v": 1,
+        "epk": "uuuTKX83ATVV2756x6K9aQ6/bCW2e8R2mJ/qFGpaybcYTDd35UnHkvrVZak7iDcOLdHqlkKYrnENTZZI57RavA==",
+        "ukm": "SSGoLj9OJrc=",
+        "kem": "V6fzcfJ1qWUEaYt3giz3KVqf5FI5Iuu8tepik8w1cnnRJZs5kK3jjOePpzwJR+92GH8DOyWJwZm7AaQrQeWOxntmYanPeJA0wwwb29Rh1tDa6lafrzaU+zT4xY1swLvQaWHsjC2XemmFUUVhhCZD46cmZzMF4INEL2iY/TvOPAZ/yluIX7+66VOcH0t4h/iyYrM14mtF33ONT52gelYXua3sd8TSmiEKQu8Lve4QtBE52NXhQ85v/8ZFf0QYbxuJeEu/hFgAKatgFe5AF8afmyG/bIuZbeKGl1IGMQjhxpZ6KEIUufXOg3ZoU/S5phcwHBUSyz7BfoE1Qrn4v+SDNDKmR0q3FexezKJVCwAk/bbDW3fhm97E4v071owraLaLfqZ1MFMWa+vUklBozYDIIW//UFPY2kbqtuiifzkqGO9tg5qj1iesoPeUbEsG9tbaWBedWSmVJ9CNZd2XUJSBzVYvii5GXe/QguZY86po4FpOsAG7vCj2dn+LUr9jGXgIlTu5V5pYPU4mUXh1BPLdcXhUz/Gr2SBG3weJ9zKUplZqfGLLVYOlQaTFGnK0X+QgGTDfrM9Z0QSP6OiRvban5ejsjW1PJf4Q7wdoShPHyBgSGpDz8kSROmOYNFw+UlKcZ/XGQYCCoMxIz6lsoXmEAyBNZeeVLQbWNEt6BcZ5wxXpNnKr2phBOiuqWQ/IyYNloNOAhjv2lkqeTksagc5fczCGvNhTM+bpykt9B1TV4tuyEDgOS5flFRzUSvDAVe/Si45nCOByr/S6/gyUbPvD99p9cnJDWP51VpkxJ5xn+8QLHwe/Wj+LZ8v20izN9OM+hDfX+mdlHJLHCpJyLKLopNMCTJifaZHi0tC8vTsrCLGTMGcztHE8UNhYJqkN3zvHDeOWkbPplKQr5R6vroYEeKXxYiZMBwQstqNjfKDH4xsFv2z+shW06DNolS+c05xm76VC9GkjD/8JHd0cKzNnI7ckscto6l2s4MIqqWPgtBttZf4JqkAZRgwxCRbdU57cFNuLhXnTpOPKeSECoNzM+qAsNXJtKV2DiitRJzPZSvM7V14uVByOjYm4tB1h7huQ2wPiJVczkiIn/4PaoaoKUFtI08Niksa+S+LQunkEBhoMV7VJMRkD4nKBetdWxB2h4ttMV3Ue/SJcXF+nHMj3hwRqmkwLCRUFKSH/Npv40hg0RPb8VUKRP1OjbBwx6H27w1v/tcATe1RYsXPFBY5UynkkpckZfrKp7IfqD710AnXMtQHcBRZ/Wl4agN8MW3BUa2A6j/Widd2Hcfl5fVPd0W2BBexMirClZBY5bL0VJPNptLLvplmiORId5krng7uC2zn0zDvmTNnLvvXhF2sqkkcx7X4YWgHaBSEIQyuvV/n5DmfD52kKKEzSS9L787WsiOJBHbJ7IJNpaNU0BLopivhYdqsKS9ZyJjalxIgWnKY=",
+        "nonce": "JJmdlniRU3AV3/WkVJvFAA==",
+        "ct": "uCAXbd0yf1N5r+5JH0qKjNXv7vrX1quywIIKInstmnE1QHnt2KDQQ7qMwqiVICelRY6XP74r/PtY7YJd8fY2ucOzkA=="
+      }
+    }
+  ]
+}

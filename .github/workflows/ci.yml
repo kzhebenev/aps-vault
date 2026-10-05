@@ -1,0 +1,122 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read          # 0.37: CI only reads the repository
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.11" }
+      - run: pip install -r backend/requirements-dev.txt
+      - name: version consistency
+        run: |
+          v=$(cat VERSION); grep -q "VERSION = \"$v\"" backend/main.py && grep -q "version = \"$v\"" mcp/pyproject.toml
+      - run: cd backend && python -m pytest -q
+      - run: pip-audit -r backend/requirements.txt
+  clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: "1.24" }
+      - run: cd clients/go && gofmt -l . && go vet ./... && go test ./...
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with: { distribution: temurin, java-version: "25" }     # 0.27: ML-KEM needs JDK 24+; the client itself compiles for 11
+      - run: cd clients/java && mkdir -p /tmp/out && javac -Xlint:all -d /tmp/out src/main/java/io/apsvault/*.java src/test/java/io/apsvault/*.java && java -cp /tmp/out io.apsvault.VaultClientTest
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: "22" }
+      - run: cd clients/node && npm ci && npm run build && node --test test/client.test.mjs
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: "1.26" }        # 0.33: plugin-testing needs Go 1.25; 0.37: deps need 1.26 (toolchain pinned in go.mod)
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with: { tofu_wrapper: false }
+      - name: "provider: vet, build, acceptance tests through the OpenTofu CLI against a fake machine API"
+        run: |
+          cd clients/terraform && gofmt -l . && go vet ./... && go build -o /tmp/terraform-provider-apsvault .
+          TF_ACC=1 TF_ACC_TERRAFORM_PATH=$(command -v tofu) TF_ACC_PROVIDER_HOST=registry.opentofu.org go test ./...
+  action-e2e:
+    name: GitHub action against a throwaway vault
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.11" }
+      - run: pip install -r backend/requirements.txt
+      - name: start a vault on the runner, create a folder, a secret and two tokens (plain, sealed)
+        id: vault
+        working-directory: backend
+        env: { VAULT_INIT_TOKEN: ci-init-token, VAULT_DATA_DIR: /tmp/vault-data, VAULT_PUBLIC_URL: "http://127.0.0.1:8086" }
+        run: |
+          mkdir -p /tmp/vault-data
+          nohup uvicorn main:app --host 127.0.0.1 --port 8086 --http h11 > /tmp/vault.log 2>&1 &
+          for _ in $(seq 1 40); do curl -fsS http://127.0.0.1:8086/api/health >/dev/null 2>&1 && break; sleep 0.5; done
+          python3 - <<'PY'
+          import json, os, sys, urllib.request, urllib.error
+          sys.path.insert(0, "../clients/python"); import aps_vault
+          url = "http://127.0.0.1:8086"
+          cookies = {}      # the session cookies are Secure; over plain http a cookie jar would drop them, so carry them by hand
+          def req(m, p, body=None, hdr=None):
+              h = {"Content-Type": "application/json", **(hdr or {})}
+              if cookies: h["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
+              r = urllib.request.Request(url + p, data=json.dumps(body).encode(), method=m, headers=h)
+              try:
+                  resp = urllib.request.urlopen(r, timeout=20)
+              except urllib.error.HTTPError as e:
+                  print(f"HTTP {e.code} {p}: {e.read().decode()[:300]}", file=sys.stderr); raise SystemExit(1)
+              for sc in resp.headers.get_all("Set-Cookie") or []:
+                  k, _, v = sc.split(";", 1)[0].partition("="); cookies[k.strip()] = v.strip()
+              return json.loads(resp.read())
+          req("POST", "/api/init", {"master_password": "ci master password 2026!", "init_token": "ci-init-token"})
+          csrf = {"X-CSRF-Token": req("POST", "/api/auth/unlock", {"master_password": "ci master password 2026!"})["csrf_token"]}
+          fid = req("POST", "/api/folders", {"name": "ci"}, csrf)["id"]
+          req("POST", "/api/secrets", {"folder_id": fid, "name": "db-password", "value": "pg-from-the-vault", "login": "app"}, csrf)
+          req("POST", "/api/secrets", {"folder_id": fid, "name": "tls.key", "value": "-----BEGIN KEY-----\nline2\n-----END KEY-----"}, csrf)
+          plain = req("POST", "/api/tokens", {"name": "ci-plain", "folder_id": fid}, csrf)["raw_token"]
+          sk, pk = aps_vault.generate_keypair()
+          sealed = req("POST", "/api/tokens", {"name": "ci-sealed", "folder_id": fid, "client_public_key": pk}, csrf)["raw_token"]
+          for v in (plain, sealed, sk): print(f"::add-mask::{v}")          # workflow commands are read from stdout
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f: f.write(f"plain={plain}\nsealed={sealed}\nsk={sk}\n")
+          PY
+      - name: vault log (on failure)
+        if: failure()
+        run: tail -50 /tmp/vault.log
+      - name: the action, plain token
+        id: plain
+        uses: ./clients/github-action
+        with:
+          url: http://127.0.0.1:8086
+          token: ${{ steps.vault.outputs.plain }}
+          secrets: |
+            db-password:DB_PASSWORD
+            db-password.login:DB_USER
+            tls.key
+      - name: the exported variables are the vault's values (multi-line key included)
+        run: |
+          [ "$DB_PASSWORD" = "pg-from-the-vault" ] && [ "$DB_USER" = "app" ] || { echo "wrong values"; exit 1; }
+          [ "$(printf '%s' "$TLS_KEY" | wc -l)" = "2" ] && [[ "$TLS_KEY" == *"line2"* ]] || { echo "multi-line value broken"; exit 1; }
+          [ "${{ steps.plain.outputs.variables }}" = "DB_PASSWORD, DB_USER, TLS_KEY" ] || { echo "output: ${{ steps.plain.outputs.variables }}"; exit 1; }
+          echo "plain token: ok"
+      - name: the action, sealed token with its private key
+        uses: ./clients/github-action
+        with:
+          url: http://127.0.0.1:8086
+          token: ${{ steps.vault.outputs.sealed }}
+          client_key: ${{ steps.vault.outputs.sk }}
+          secrets: db-password:SEALED_DB_PASSWORD
+      - run: '[ "$SEALED_DB_PASSWORD" = "pg-from-the-vault" ] && echo "sealed token: ok"'
+      - name: a sealed token without the key must fail the step
+        id: nokey
+        continue-on-error: true
+        uses: ./clients/github-action
+        with:
+          url: http://127.0.0.1:8086
+          token: ${{ steps.vault.outputs.sealed }}
+          secrets: db-password:NEVER_SET
+      - run: '[ "${{ steps.nokey.outcome }}" = "failure" ] && [ -z "${NEVER_SET:-}" ] && echo "refused without the key: ok"'
