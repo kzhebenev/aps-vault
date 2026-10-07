@@ -1,0 +1,73 @@
+# APS Vault as a Docker Swarm stack (0.36).
+#   docker swarm init                                            # once, on the manager
+#   printf '%s' "$(openssl rand -hex 24)" | docker secret create aps_vault_init_token -
+#   printf '%s' "$(openssl rand -base64 32)" | docker secret create aps_vault_sso_unlock_key -
+#   docker node update --label-add aps_vault.data=true <node>   # the node that holds ./data (SQLite) — one node, or use
+#                                                                #   VAULT_DATABASE_URL=postgresql+psycopg://… and drop the constraint
+#   docker stack deploy -c examples/docker-swarm/stack.yml aps-vault
+# Then open http://<node>:8087 (put a TLS-terminating proxy in front) and initialise with the init token.
+# The backend has no published port: only the frontend's nginx reaches it over the stack's overlay network.
+services:
+  backend:
+    image: ghcr.io/kzhebenev/aps-vault/backend:0.41.4
+    environment:
+      VAULT_DATA_DIR: /app/data
+      VAULT_PUBLIC_URL: https://vault.example.com          # what the UI and e-mails call the vault
+      # secrets are files under /run/secrets; the entrypoint reads *_FILE variants
+      VAULT_INIT_TOKEN_FILE: /run/secrets/aps_vault_init_token
+      VAULT_SSO_UNLOCK_KEY_FILE: /run/secrets/aps_vault_sso_unlock_key
+    secrets:
+      - aps_vault_init_token
+      - aps_vault_sso_unlock_key
+    volumes:
+      - aps_vault_data:/app/data
+    networks: [vault]
+    deploy:
+      replicas: 1                                          # SQLite: exactly one replica; PostgreSQL: scale freely (docs/CLUSTER.md)
+      placement:
+        constraints: ["node.labels.aps_vault.data == true"]
+      update_config: { order: stop-first }
+      restart_policy: { condition: on-failure }
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8086/api/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    image: ghcr.io/kzhebenev/aps-vault/frontend:0.41.4
+    environment:
+      VAULT_BACKEND_URL: http://backend:8086               # the stack's service name (0.30.1 template)
+    ports:
+      # 0.37: "ingress" mode SNATs every client to one address — the attempt limit and token CIDR policies would see a
+      # single source. "host" publishes on the node itself and keeps client addresses (one frontend per node).
+      - target: 80
+        published: 8087
+        protocol: tcp
+        mode: host
+    networks: [vault]
+    deploy:
+      mode: global                                         # with host ports: one frontend per node
+      update_config: { order: stop-first }
+      restart_policy: { condition: on-failure }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  vault:
+    driver: overlay
+    attachable: false
+
+volumes:
+  aps_vault_data: {}                                       # vault.db + config.json — back it up (docs/DEPLOYMENT.md)
+
+secrets:
+  aps_vault_init_token:
+    external: true
+  aps_vault_sso_unlock_key:
+    external: true
