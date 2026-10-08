@@ -1,0 +1,41 @@
+name: "APS Vault secrets"
+description: "Read secrets from APS Vault with a folder-scoped service token and export them as masked environment variables for the following steps."
+author: "APS Vault"
+branding: { icon: lock, color: gray-dark }
+inputs:
+  url:
+    description: "Vault address, e.g. https://vault.example.com"
+    required: true
+  token:
+    description: "Service token (vlt_…) — keep it in a repository/environment secret"
+    required: true
+  secrets:
+    description: "Secrets to export, one per line or space-separated: name[.field][:ENV]. field = value (default) | login | notes | totp; ENV defaults to UPPER_SNAKE_CASE of the name."
+    required: true
+  client_key:
+    description: "Private key of a sealed token (base64) — values then arrive encrypted to it; needs the cryptography package (installed on demand)"
+    required: false
+    default: ""
+outputs:
+  variables:
+    description: "The variable names that were exported, comma-separated"
+    value: ${{ steps.fetch.outputs.variables }}
+runs:
+  using: composite
+  steps:
+    - name: sealed token → make sure the envelope can be opened
+      if: inputs.client_key != ''
+      shell: bash
+      run: python3 -c "import cryptography" 2>/dev/null || python3 -m pip install -q --disable-pip-version-check cryptography==50.0.2 kyber-py==1.2.0
+    - id: fetch
+      shell: bash
+      env:
+        VAULT_URL: ${{ inputs.url }}
+        VAULT_TOKEN: ${{ inputs.token }}
+        VAULT_CLIENT_KEY: ${{ inputs.client_key }}
+        APS_ITEMS: ${{ inputs.secrets }}
+      run: |
+        # shellcheck disable=SC2086
+        out=$(python3 "${{ github.action_path }}/../ci/aps-vault-ci.py" --github $APS_ITEMS)
+        printf '%s\n' "$out"
+        echo "variables=$(printf '%s\n' "$out" | sed -n 's/^aps-vault-ci: exported [0-9]* variable(s): //p')" >> "$GITHUB_OUTPUT"
