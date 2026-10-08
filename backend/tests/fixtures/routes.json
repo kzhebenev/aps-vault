@@ -1,0 +1,1362 @@
+{
+ "routes": [
+  {
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "path": "/openapi.json",
+   "name": "openapi",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "path": "/docs",
+   "name": "swagger_ui_html",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "path": "/docs/oauth2-redirect",
+   "name": "swagger_ui_redirect",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "path": "/redoc",
+   "name": "redoc_html",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/health",
+   "name": "health",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/ready",
+   "name": "ready",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/init",
+   "name": "init_vault",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/unlock",
+   "name": "unlock",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/hsm/status",
+   "name": "hsm_status",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/hsm/enable",
+   "name": "hsm_enable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/hsm/disable",
+   "name": "hsm_disable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/hsm/unlock",
+   "name": "hsm_unlock",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/kms/status",
+   "name": "kms_status",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/kms/enable",
+   "name": "kms_enable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/kms/disable",
+   "name": "kms_disable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/kms/unlock",
+   "name": "kms_unlock",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/webauthn/status",
+   "name": "webauthn_status",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/webauthn/credentials",
+   "name": "webauthn_list",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/webauthn/register/options",
+   "name": "webauthn_register_options",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/webauthn/register/finish",
+   "name": "webauthn_register_finish",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/auth/webauthn/credentials/{cid}",
+   "name": "webauthn_delete",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/webauthn/second-factor",
+   "name": "webauthn_second_factor",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/webauthn/options",
+   "name": "webauthn_options",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/webauthn/unlock",
+   "name": "webauthn_unlock",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/oidc/status",
+   "name": "oidc_status",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/sso-unlock/status",
+   "name": "sso_unlock_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/sso-unlock/enable",
+   "name": "sso_unlock_enable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/sso-unlock/disable",
+   "name": "sso_unlock_disable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/oidc/login",
+   "name": "oidc_login",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/oidc/callback",
+   "name": "oidc_callback",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/lock",
+   "name": "lock",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/auth/2fa/status",
+   "name": "twofa_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/2fa/setup",
+   "name": "twofa_setup",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/2fa/verify",
+   "name": "twofa_verify",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/2fa/disable",
+   "name": "twofa_disable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/recover",
+   "name": "recover",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/me",
+   "name": "whoami",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/users",
+   "name": "list_users",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/users",
+   "name": "create_user",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/users/{uid}/invite",
+   "name": "reinvite_user",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/users/{uid}",
+   "name": "deactivate_user",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PUT"
+   ],
+   "path": "/api/users/{uid}/grants",
+   "name": "set_user_grant",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/users/{uid}/grants/{fid}",
+   "name": "remove_user_grant",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/invite/{token}",
+   "name": "invite_info",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/invite/{token}",
+   "name": "invite_accept",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/login",
+   "name": "user_login",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/me/password",
+   "name": "user_change_password",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/me/totp",
+   "name": "me_totp_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/me/totp/setup",
+   "name": "me_totp_setup",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/me/totp/verify",
+   "name": "me_totp_verify",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/me/totp/disable",
+   "name": "me_totp_disable",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/folders/{fid}/rotate-key",
+   "name": "rotate_folder_key",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/folders",
+   "name": "list_folders",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/folders",
+   "name": "create_folder",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/folders/{fid}",
+   "name": "delete_folder",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/secrets",
+   "name": "list_secrets",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/secrets",
+   "name": "create_secret",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/secrets/{sid}",
+   "name": "get_secret",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PATCH"
+   ],
+   "path": "/api/secrets/{sid}",
+   "name": "update_secret",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/secrets/{sid}",
+   "name": "delete_secret",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/secrets/{sid}/rotate",
+   "name": "rotate_secret",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/secrets/{sid}/favorite",
+   "name": "toggle_favorite",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/secrets/{sid}/history",
+   "name": "get_secret_history",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/stats",
+   "name": "stats",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/export",
+   "name": "export_json",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/import/parse",
+   "name": "import_parse",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/import/hashicorp",
+   "name": "import_hashicorp",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/import/passwork",
+   "name": "import_passwork",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/import",
+   "name": "import_json",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/rotations/status",
+   "name": "rotation_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/rotations",
+   "name": "list_rotations",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/secrets/{sid}/rotation",
+   "name": "get_rotation",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PUT"
+   ],
+   "path": "/api/secrets/{sid}/rotation",
+   "name": "set_rotation",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/secrets/{sid}/rotation",
+   "name": "delete_rotation",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/secrets/{sid}/rotation/run",
+   "name": "run_rotation_now",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/rotations/cells",
+   "name": "write_rotation_cells",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/secrets/{sid}/totp",
+   "name": "secret_totp",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/tools/hibp/{prefix}",
+   "name": "hibp_range",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/change-password",
+   "name": "change_password",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/tokens/alerts",
+   "name": "list_token_alerts",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens/alerts/{aid}/ack",
+   "name": "ack_token_alert",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/tokens/{tid}/profile",
+   "name": "token_profile",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PATCH"
+   ],
+   "path": "/api/tokens/{tid}",
+   "name": "patch_token",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens/{tid}/freeze",
+   "name": "freeze_token",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens/{tid}/unfreeze",
+   "name": "unfreeze_token",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens/{tid}/trust-network",
+   "name": "trust_token_network",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens/leak-check",
+   "name": "leak_check",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/tokens",
+   "name": "list_tokens",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/enrollments",
+   "name": "create_enrollment",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/enrollments",
+   "name": "list_enrollments",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/enrollments/{eid}",
+   "name": "revoke_enrollment",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/enroll",
+   "name": "enroll_node",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/tokens",
+   "name": "create_token",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/tokens/{tid}",
+   "name": "revoke_token",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/audit",
+   "name": "get_audit",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/backup/status",
+   "name": "backup_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PUT"
+   ],
+   "path": "/api/backup/config",
+   "name": "backup_config",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "PUT"
+   ],
+   "path": "/api/backup/key",
+   "name": "backup_set_key",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/backup/keygen",
+   "name": "backup_keygen",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/backup/run",
+   "name": "backup_run_now",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/update/status",
+   "name": "update_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/update/check",
+   "name": "update_check",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/update/apply",
+   "name": "update_apply",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/update/jobs/{jid}/cancel",
+   "name": "update_cancel",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/agent/update",
+   "name": "agent_poll",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/agent/update/{jid}",
+   "name": "agent_report",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/metrics",
+   "name": "prometheus_metrics",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/security/lockdowns",
+   "name": "security_lockdowns",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/approvals/settings",
+   "name": "approvals_settings",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/approvals/approver",
+   "name": "approvals_set_approver",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/approvals/approver",
+   "name": "approvals_clear_approver",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/approvals",
+   "name": "approvals_list",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/secrets/{sid}/approvals",
+   "name": "approval_request",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/approvals/{aid}",
+   "name": "approval_status",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/approve/{token}",
+   "name": "approve_info",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/approve/{token}",
+   "name": "approve_decide",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/share/note",
+   "name": "create_note_share",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/share",
+   "name": "create_share",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/share/{token}",
+   "name": "open_share",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/shares",
+   "name": "list_shares",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/shares/note/{nid}",
+   "name": "revoke_note_share",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/shares/{sid}",
+   "name": "revoke_share",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/webhooks",
+   "name": "list_webhooks",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/webhooks",
+   "name": "create_webhook",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/webhooks/{wid}",
+   "name": "delete_webhook",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/agent-keys",
+   "name": "list_agent_keys",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/agent-keys",
+   "name": "create_agent_key",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/agent-keys/{kid}",
+   "name": "revoke_agent_key",
+   "deps": [
+    "require_unlocked"
+   ]
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/auth/agent",
+   "name": "agent_login",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/v1/m/health",
+   "name": "health",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/v1/m/secrets",
+   "name": "list_secrets",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/v1/m/secret/{name}/versions",
+   "name": "list_secret_versions",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/v1/m/secret/{name}",
+   "name": "get_secret_by_name",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST"
+   ],
+   "path": "/api/v1/m/secret/{name}",
+   "name": "put_secret_by_name",
+   "deps": []
+  },
+  {
+   "methods": [
+    "DELETE"
+   ],
+   "path": "/api/v1/m/secret/{name}",
+   "name": "delete_secret_by_name",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/api/v1/m/audit",
+   "name": "folder_audit",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/sys/internal/ui/mounts/{path:path}",
+   "name": "kv_mount_info",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/auth/token/lookup-self",
+   "name": "kv_lookup_self",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/{mount}/metadata/{name:path}",
+   "name": "kv_metadata",
+   "deps": []
+  },
+  {
+   "methods": [
+    "LIST"
+   ],
+   "path": "/v1/{mount}/metadata/{name:path}",
+   "name": "kv_metadata",
+   "deps": []
+  },
+  {
+   "methods": [
+    "POST",
+    "PUT"
+   ],
+   "path": "/v1/{mount}/data/{name:path}",
+   "name": "kv_write",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/sys/seal-status",
+   "name": "kv_seal_status",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/sys/health",
+   "name": "kv_health",
+   "deps": []
+  },
+  {
+   "methods": [
+    "GET"
+   ],
+   "path": "/v1/{mount}/data/{name:path}",
+   "name": "kv_read",
+   "deps": []
+  }
+ ],
+ "middleware": [
+  "BaseHTTPMiddleware",
+  "BaseHTTPMiddleware",
+  "CORSMiddleware"
+ ]
+}
