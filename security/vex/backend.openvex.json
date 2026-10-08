@@ -1,0 +1,479 @@
+{
+ "@context": "https://openvex.dev/ns/v0.2.0",
+ "@id": "https://github.com/kzhebenev/aps-vault/vex/backend-e938443710d62249",
+ "author": "APS Vault maintainers",
+ "timestamp": "2026-10-05T20:26:34Z",
+ "version": 1,
+ "tooling": "ops/gen-vex.py for backend 0.41.0",
+ "statements": [
+  {
+   "vulnerability": {
+    "name": "CVE-2011-4116"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/perl-base"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Perl is in the image only because dpkg needs it at build time; the backend never runs perl or Archive::Tar."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2013-4392"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2022-0563"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2023-31437"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2023-31438"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2023-31439"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2025-6141"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libncursesw6"
+    },
+    {
+     "@id": "pkg:deb/debian/libtinfo6"
+    },
+    {
+     "@id": "pkg:deb/debian/ncurses-base"
+    },
+    {
+     "@id": "pkg:deb/debian/ncurses-bin"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Terminal handling (ncurses) is never used by the server process; no TTY, no curses/readline import."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2025-69720"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libncursesw6"
+    },
+    {
+     "@id": "pkg:deb/debian/libtinfo6"
+    },
+    {
+     "@id": "pkg:deb/debian/ncurses-base"
+    },
+    {
+     "@id": "pkg:deb/debian/ncurses-bin"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Terminal handling (ncurses) is never used by the server process; no TTY, no curses/readline import."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-15059"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-15534"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/perl-base"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Perl is in the image only because dpkg needs it at build time; the backend never runs perl or Archive::Tar."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-16742"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-19487"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/perl-base"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Perl is in the image only because dpkg needs it at build time; the backend never runs perl or Archive::Tar."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-3184"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-40228"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libsystemd0"
+    },
+    {
+     "@id": "pkg:deb/debian/libudev1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_present",
+   "impact_statement": "The flaw is in systemd-homed, which is not in the image; the container has no init system."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-54369"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libacl1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The backend never calls libacl on paths; the only writable path is the data directory owned by the process itself."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-54370"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/libacl1"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The backend never calls libacl on paths; the only writable path is the data directory owned by the process itself."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-76642"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-78408"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-78409"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-78410"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/bsdutils"
+    },
+    {
+     "@id": "pkg:deb/debian/libblkid1"
+    },
+    {
+     "@id": "pkg:deb/debian/liblastlog2-2"
+    },
+    {
+     "@id": "pkg:deb/debian/libmount1"
+    },
+    {
+     "@id": "pkg:deb/debian/libsmartcols1"
+    },
+    {
+     "@id": "pkg:deb/debian/libuuid1"
+    },
+    {
+     "@id": "pkg:deb/debian/login"
+    },
+    {
+     "@id": "pkg:deb/debian/mount"
+    },
+    {
+     "@id": "pkg:deb/debian/util-linux"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "The vulnerable code is in mount(8) helpers / X-mount options and nsenter(1). The backend never executes them; it runs as uid 10001 with all capabilities dropped and no-new-privileges, so there is no privileged mount or namespace operation to subvert. libuuid is loaded by Python's uuid module, but not the affected code."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-82560"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/perl-base"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Perl is in the image only because dpkg needs it at build time; the backend never runs perl or Archive::Tar."
+  },
+  {
+   "vulnerability": {
+    "name": "CVE-2026-9538"
+   },
+   "products": [
+    {
+     "@id": "pkg:deb/debian/perl-base"
+    }
+   ],
+   "status": "not_affected",
+   "justification": "vulnerable_code_not_in_execute_path",
+   "impact_statement": "Perl is in the image only because dpkg needs it at build time; the backend never runs perl or Archive::Tar."
+  }
+ ]
+}
