@@ -1,0 +1,82 @@
+# APS Vault — clustered reference deployment (docs/CLUSTER.md).
+#
+#   two stateless backend replicas  ──►  one PostgreSQL (yours, or the bundled one)
+#   one nginx: static UI + load balancer over the replicas (health-checked)
+#
+# Nothing is kept on a node: unlock sessions, lock-outs, the master-key verifier and the
+# secrets all live in the database. Any replica can be restarted or lost at any moment.
+#
+#   cp .env.example .env            # edit: VAULT_DATABASE_URL (or keep the bundled postgres)
+#   docker compose up -d --build
+#   curl -s http://127.0.0.1:8087/api/health   # "node" changes between calls
+#
+# Scaling: copy the backend-b block as backend-c and add it to nginx-lb.conf upstream.
+x-backend: &backend
+  build: ../../backend
+  restart: unless-stopped
+  env_file: .env
+  security_opt: ["no-new-privileges:true"]     # 0.37
+  cap_drop: ["ALL"]
+  depends_on:
+    postgres:
+      condition: service_healthy
+      required: false
+  healthcheck:
+    test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8086/api/ready', timeout=4).status == 200 else 1)"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+  deploy:
+    resources:
+      limits:
+        memory: 512m
+
+services:
+  backend-a:
+    <<: *backend
+    environment:
+      - VAULT_NODE_NAME=backend-a
+  backend-b:
+    <<: *backend
+    environment:
+      - VAULT_NODE_NAME=backend-b
+
+  frontend:
+    build: ../../frontend
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
+    ports:
+      - "${VAULT_BIND:-127.0.0.1}:${VAULT_PORT:-8087}:80"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      # 0.31.1: the frontend image renders nginx.conf.template into conf.d/default.conf at start (0.30.1);
+      # with our own config mounted there read-only that write fails and the container loops. Point the
+      # renderer at a directory that does not exist and it skips — the mounted nginx-lb.conf is used as is.
+      - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates-off
+    depends_on:
+      - backend-a
+      - backend-b
+
+  # Bundled PostgreSQL for pilots. For production point VAULT_DATABASE_URL at your own cluster
+  # (Patroni / managed) and remove this service — or run `docker compose --profile standalone`.
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["standalone"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-vault}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in .env}
+      POSTGRES_DB: ${PG_DB:-vault}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-vault} -d ${PG_DB:-vault}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
