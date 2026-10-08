@@ -1,0 +1,17 @@
+# Overrides for the throwaway e2e stack (ops/checks/e2e-stack.sh): fresh data dir, own port.
+services:
+  backend:
+    volumes:
+      - ${E2E_DATA:-/tmp/aps-vault-e2e-data}:/app/data
+    # 0.39: !override — compose merges env_file lists; without it the dev .env (with real S3 keys) leaked into the e2e backend
+    env_file: !override
+      - /tmp/aps-vault-e2e.env
+  # AWS KMS emulator (LocalStack community) for the cloud-KMS steps of the browser check
+  localstack:
+    image: localstack/localstack:3.8.1
+    environment:
+      SERVICES: kms
+      EAGER_SERVICE_LOADING: "1"
+  frontend:
+    ports: !override
+      - "127.0.0.1:${E2E_PORT:-8189}:80"

@@ -1,0 +1,19 @@
+fastapi==0.142.2            # 0.28.2: starlette ≥1.3.1 (PYSEC-2026-248/249/1941/1943/2280/2281)
+uvicorn[standard]==0.32.0
+sqlalchemy==2.0.36
+pydantic==2.9.2
+argon2-cffi==23.1.0
+cryptography==50.0.2           # 0.28.2: required by pyopenssl 26
+python-multipart==0.0.31    # 0.28.2: PYSEC-2026-3036/3039/3040
+pyopenssl==26.4.0          # 0.28.2: transitive; pinned to the fixed version (PYSEC-2026-2268/2269)
+pyotp==2.9.0
+qrcode==7.4.2
+pypng==0.20220715.0
+psycopg[binary]==3.2.3
+webauthn==2.2.0
+python-pkcs11==0.10.0
+gostcrypto==1.2.5
+kyber-py==1.2.0          # 0.27: ML-KEM-768 for the post-quantum hybrid envelope (pure Python, MIT)
+PyMySQL==1.1.1            # 0.30: MySQL / MariaDB rotation target (pure Python, MIT)
+ldap3==2.9.1              # 0.31: LDAP rotation target (pure Python, LGPL)
+paramiko==5.0.0           # 0.31: SSH rotation target (chpasswd over a pinned host key)
