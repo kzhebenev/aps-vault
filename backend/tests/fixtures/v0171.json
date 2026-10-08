@@ -1,0 +1,15 @@
+{
+ "master": "fixture master password 0.17.1",
+ "recovery": "47D5DA14A6C75336FC62A25A",
+ "session_id": "gzJdjujKf33hNdBuy0CdKENtddSjF7LsxigeuOvHb94",
+ "token": "vlt_splmoc4nan6a_04f374c8d265e46d6149ddcd5a1581fa8003f95c3babbefde6b0b1203f9104e5",
+ "sealed_token": "vlt_tfokkfrk7kfa_14dd8c4fca7af9a92acf318545e2f55f665e90d853595155393a612be262ecbf",
+ "sealed_sk": "UCljLz9d6fbv56ojMxX5x/AxU6HyNwU3jVHseN1d1GU=",
+ "share_url": "/share/hFptN8h4P2sUCupa9pk3csRNmgTdNuLv",
+ "note_url": "/share/Qur--C2oxzWCjoZ6G3JW5ScncMnLjltj",
+ "secret_id": 1,
+ "sso_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+ "approver_password": "approver pass 2026",
+ "version": "0.17.1",
+ "created_at": "2026-10-03T16:13:17"
+}
