@@ -1,0 +1,232 @@
+"""Sealed delivery (0.17): a token bound to an X25519 public key never yields plaintext — the
+machine API answers with an envelope only the private key opens. Negative cases: wrong key,
+another secret's name as AAD, a tampered blob, the KV facade, a malformed public key."""
+import base64
+import json
+
+import pytest
+
+import sealed
+from conftest import unlock
+
+
+@pytest.fixture(scope="module")
+def setup(client, initialized):
+    hdr = unlock(client)
+    fid = client.post("/api/folders", json={"name": "sealed-scope"}, headers=hdr).json()["id"]
+    client.post("/api/secrets", json={"folder_id": fid, "name": "core-db", "value": "pg-pass-2026", "login": "core",
+                                      "notes": "primary cluster", "totp_seed": "JBSWY3DPEHPK3PXP"}, headers=hdr)
+    client.post("/api/secrets", json={"folder_id": fid, "name": "other", "value": "unrelated"}, headers=hdr)
+    sk, pk = sealed.generate_keypair()
+    r = client.post("/api/tokens", json={"name": "core-node-sealed", "folder_id": fid, "can_read_notes": True, "can_read_totp": True,
+                                         "can_write": True, "client_public_key": pk}, headers=hdr)
+    assert r.status_code == 200, r.text
+    assert r.json()["sealed"] is True
+    plain = client.post("/api/tokens", json={"name": "core-node-plain", "folder_id": fid}, headers=hdr).json()["raw_token"]
+    return {"hdr": hdr, "fid": fid, "sk": base64.b64decode(sk), "pk": pk, "token": r.json()["raw_token"], "plain": plain}
+
+
+def test_malformed_public_key_is_422(client, setup):
+    for bad in ("AAAA", base64.b64encode(b"x" * 31).decode(), base64.b64encode(b"\x00" * 32).decode(), "not base64!!",
+                base64.b64encode(b"\x00" * 64).decode(), base64.b64encode(b"\x07" * 64).decode()):    # 64 bytes but not on the GOST curve
+        r = client.post("/api/tokens", json={"name": f"bad-{bad[:4]}", "folder_id": setup["fid"], "client_public_key": bad}, headers=setup["hdr"])
+        assert r.status_code == 422, (bad, r.text)
+    lst = client.get("/api/tokens", headers=setup["hdr"]).json()
+    me = next(t for t in lst if t["name"] == "core-node-sealed")
+    assert me["sealed"] is True and me["client_public_key"] == setup["pk"]
+    assert next(t for t in lst if t["name"] == "core-node-plain")["sealed"] is False
+
+
+def test_sealed_token_never_returns_plaintext(client, setup):
+    h = {"Authorization": f"Bearer {setup['token']}"}
+    assert client.get("/api/v1/m/health", headers=h).json()["sealed"] is True
+    r = client.get("/api/v1/m/secret/core-db", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.text
+    for secret_bit in ("pg-pass-2026", "primary cluster", '"login"', '"value"', '"totp"'):
+        assert secret_bit not in body, f"plaintext leaked: {secret_bit}"
+    j = r.json()
+    assert set(j) == {"name", "version", "current_version", "updated_at", "sealed"}
+    env = j["sealed"]
+    assert env["alg"] == sealed.ALG and env["v"] == 1 and len(base64.b64decode(env["epk"])) == 32 and len(base64.b64decode(env["nonce"])) == 12
+    # the right private key opens it — value, login, notes and a live TOTP code as granted
+    pt = sealed.unseal(env, setup["sk"], "core-db")
+    assert pt["value"] == "pg-pass-2026" and pt["login"] == "core" and pt["notes"] == "primary cluster" and len(pt["totp"]) == 6
+    # another key does not
+    other_sk, _ = sealed.generate_keypair()
+    with pytest.raises(Exception):
+        sealed.unseal(env, base64.b64decode(other_sk), "core-db")
+    # the envelope is bound to the secret's name (AAD)
+    with pytest.raises(Exception):
+        sealed.unseal(env, setup["sk"], "other")
+    # a flipped ciphertext byte is detected
+    ct = bytearray(base64.b64decode(env["ct"])); ct[0] ^= 1
+    with pytest.raises(Exception):
+        sealed.unseal({**env, "ct": base64.b64encode(bytes(ct)).decode()}, setup["sk"], "core-db")
+    # every response uses a fresh ephemeral key and nonce
+    env2 = client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"]
+    assert env2["epk"] != env["epk"] and env2["nonce"] != env["nonce"] and env2["ct"] != env["ct"]
+    assert sealed.unseal(env2, setup["sk"], "core-db")["value"] == "pg-pass-2026"
+    # older versions are sealed the same way
+    assert client.post("/api/v1/m/secret/core-db", json={"value": "pg-pass-2027"}, headers=h).status_code == 200
+    v1 = client.get("/api/v1/m/secret/core-db?version=1", headers=h).json()
+    assert "value" not in v1 and sealed.unseal(v1["sealed"], setup["sk"], "core-db")["value"] == "pg-pass-2026"
+    assert sealed.unseal(client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"], setup["sk"], "core-db")["value"] == "pg-pass-2027"
+    # the HashiCorp KV facade has no place for an envelope → 403, not plaintext
+    kv = client.get("/v1/sealed-scope/data/core-db", headers=h)
+    assert kv.status_code == 403 and "sealed" in kv.text and "pg-pass" not in kv.text
+    # a plain token in the same folder still reads plaintext — sealing is per token
+    p = client.get("/api/v1/m/secret/core-db", headers={"Authorization": f"Bearer {setup['plain']}"}).json()
+    assert p["value"] == "pg-pass-2027" and "sealed" not in p
+    # audit marks sealed reads
+    acts = client.get("/api/audit", params={"limit": 50}, headers=setup["hdr"]).json()
+    assert any(a["action"] == "m:secret:read" and (a.get("meta") or {}).get("sealed") for a in acts)
+
+
+def test_gost_envelope_for_a_gost_client_key(client, setup):
+    """0.19: a 64-byte GOST R 34.10-2012 public key on the token selects the GOST envelope — VKO,
+    KDF_TREE, Kuznyechik-MGM — independent of the vault's cipher suite; the X25519 path is untouched."""
+    import gostec
+    sk, pk = sealed.generate_keypair("gost")
+    assert sealed.key_kind(pk) == "gost" and len(base64.b64decode(pk)) == 64
+    r = client.post("/api/tokens", json={"name": "core-node-gost", "folder_id": setup["fid"], "can_read_notes": True, "client_public_key": pk}, headers=setup["hdr"])
+    assert r.status_code == 200 and r.json()["sealed"] is True, r.text
+    h = {"Authorization": f"Bearer {r.json()['raw_token']}"}
+    j = client.get("/api/v1/m/secret/core-db", headers=h).json()
+    env = j["sealed"]
+    assert env["alg"] == sealed.ALG_GOST and env["v"] == 1 and len(base64.b64decode(env["epk"])) == 64 and len(base64.b64decode(env["ukm"])) == 8 and len(base64.b64decode(env["nonce"])) == 16
+    assert base64.b64decode(env["nonce"])[0] & 0x80 == 0, "MGM nonce has the top bit clear"
+    gostec.decode_point(base64.b64decode(env["epk"]))          # the ephemeral key is a valid point
+    assert "value" not in j and "pg-pass" not in client.get("/api/v1/m/secret/core-db", headers=h).text
+    pt = sealed.unseal(env, base64.b64decode(sk), "core-db")
+    assert pt["value"].startswith("pg-pass-") and pt["login"] == "core" and pt["notes"] == "primary cluster"
+    other_sk, _ = sealed.generate_keypair("gost")
+    with pytest.raises(Exception):
+        sealed.unseal(env, base64.b64decode(other_sk), "core-db")
+    with pytest.raises(Exception):
+        sealed.unseal(env, base64.b64decode(sk), "other")
+    env2 = client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"]
+    assert env2["epk"] != env["epk"] and env2["ukm"] != env["ukm"], "fresh ephemeral key and UKM per response"
+    assert client.get("/v1/sealed-scope/data/core-db", headers=h).status_code == 403
+    # the X25519 token of this module still gets its own envelope type
+    x = client.get("/api/v1/m/secret/core-db", headers={"Authorization": f"Bearer {setup['token']}"}).json()["sealed"]
+    assert x["alg"] == sealed.ALG and "ukm" not in x
+
+
+def test_p256_envelope_for_a_hardware_style_key(client, setup):
+    """0.22: a 65-byte uncompressed P-256 point selects the P-256 envelope — the curve every TPM 2.0 and
+    PKCS#11 token can do ECDH on; opened here in software with the scalar, in the clients also through PKCS#11."""
+    sk, pk = sealed.generate_keypair("p256")
+    assert sealed.key_kind(pk) == "p256" and base64.b64decode(pk)[0] == 0x04
+    for bad in (base64.b64encode(b"\x04" + b"\x01" * 64).decode(), base64.b64encode(b"\x02" + b"\x01" * 64).decode()):
+        assert client.post("/api/tokens", json={"name": "bad-p256", "folder_id": setup["fid"], "client_public_key": bad}, headers=setup["hdr"]).status_code == 422
+    r = client.post("/api/tokens", json={"name": "core-node-p256", "folder_id": setup["fid"], "client_public_key": pk}, headers=setup["hdr"])
+    assert r.status_code == 200, r.text
+    h = {"Authorization": f"Bearer {r.json()['raw_token']}"}
+    j = client.get("/api/v1/m/secret/core-db", headers=h).json()
+    env = j["sealed"]
+    assert env["alg"] == sealed.ALG_P256 and len(base64.b64decode(env["epk"])) == 65 and len(base64.b64decode(env["nonce"])) == 12 and "value" not in j
+    assert sealed.unseal(env, base64.b64decode(sk), "core-db")["value"].startswith("pg-pass-")
+    with pytest.raises(Exception):
+        sealed.unseal(env, base64.b64decode(sealed.generate_keypair("p256")[0]), "core-db")
+    with pytest.raises(Exception):
+        sealed.unseal(env, base64.b64decode(sk), "other")
+    env2 = client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"]
+    assert env2["epk"] != env["epk"], "fresh ephemeral key per response"
+
+
+def test_pqc_hybrid_envelope_x25519_plus_mlkem768(client, setup):
+    """0.27: a 1216-byte X25519‖ML-KEM-768 public key selects the hybrid envelope — two key agreements,
+    one HKDF; opening needs BOTH private halves, and a tampered KEM ciphertext or ephemeral key fails."""
+    import json as _json
+    import os
+    sk, pk = sealed.generate_keypair("pqc")
+    sk_raw = base64.b64decode(sk)
+    assert sealed.key_kind(pk) == "pqc" and len(base64.b64decode(pk)) == 1216 and len(sk_raw) == 96
+    assert sealed.mlkem_ek_valid(base64.b64decode(pk)[32:]) and not sealed.mlkem_ek_valid(b"\xff" * 1184) and not sealed.mlkem_ek_valid(b"\x00" * 1183)
+    assert base64.b64encode(sealed.pqc_public_from_private(sk_raw)).decode() == pk, "the public key is a pure function of the 96-byte private key"
+    # malformed hybrid keys are refused at token creation
+    for bad in (base64.b64encode(b"\x00" * 32 + base64.b64decode(pk)[32:]).decode(),          # zero X25519 half
+                base64.b64encode(base64.b64decode(pk)[:32] + b"\xff" * 1184).decode(),       # ML-KEM half with coefficients ≥ q
+                base64.b64encode(base64.b64decode(pk)[:-1]).decode()):                       # 1215 bytes
+        assert client.post("/api/tokens", json={"name": "bad-pqc", "folder_id": setup["fid"], "client_public_key": bad}, headers=setup["hdr"]).status_code == 422, bad[:20]
+    r = client.post("/api/tokens", json={"name": "core-node-pqc", "folder_id": setup["fid"], "can_read_notes": True, "client_public_key": pk}, headers=setup["hdr"])
+    assert r.status_code == 200, r.text
+    assert next(t for t in client.get("/api/tokens", headers=setup["hdr"]).json() if t["name"] == "core-node-pqc")["client_public_key"] == pk, "the long key survives the column"
+    h = {"Authorization": f"Bearer {r.json()['raw_token']}"}
+    j = client.get("/api/v1/m/secret/core-db", headers=h).json()
+    env = j["sealed"]
+    assert env["alg"] == sealed.ALG_PQC and env["v"] == 1 and "value" not in j and "notes" not in j
+    assert len(base64.b64decode(env["epk"])) == 32 and len(base64.b64decode(env["kem"])) == 1088 and len(base64.b64decode(env["nonce"])) == 12
+    pt = sealed.unseal(env, sk_raw, "core-db")
+    assert pt["value"].startswith("pg-pass-") and pt["login"] == "core" and pt["notes"] == "primary cluster"
+    # both halves matter: a right X25519 half with a wrong ML-KEM seed fails, and vice versa
+    other = base64.b64decode(sealed.generate_keypair("pqc")[0])
+    for wrong in (other, sk_raw[:32] + other[32:], other[:32] + sk_raw[32:]):
+        with pytest.raises(Exception):
+            sealed.unseal(env, wrong, "core-db")
+    # tampering with any part of the envelope fails
+    for field in ("kem", "epk", "ct", "nonce"):
+        raw = bytearray(base64.b64decode(env[field])); raw[0] ^= 0x01
+        bad_env = dict(env); bad_env[field] = base64.b64encode(bytes(raw)).decode()
+        with pytest.raises(Exception):
+            sealed.unseal(bad_env, sk_raw, "core-db")
+    with pytest.raises(Exception):
+        sealed.unseal(env, sk_raw, "other")
+    env2 = client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"]
+    assert env2["epk"] != env["epk"] and env2["kem"] != env["kem"], "fresh ephemeral key and fresh encapsulation per response"
+    # the shared fixture every client port opens is produced by this very code
+    fx = _json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "clients", "fixtures", "pqc-sealed.json"), encoding="utf-8"))
+    fsk = base64.b64decode(fx["keypair"]["private_b64"])
+    assert base64.b64encode(sealed.pqc_public_from_private(fsk)).decode() == fx["keypair"]["public_b64"]
+    for e in fx["envelopes"]:
+        assert sealed.unseal(e["sealed"], fsk, e["name"]) == e["payload"]
+
+
+def test_gost_pqc_hybrid_envelope_vko_plus_mlkem768(client, setup):
+    """0.32: a 1248-byte GOST‖ML-KEM-768 public key selects the GOST hybrid — VKO and an ML-KEM encapsulation
+    feed one KDF_TREE; Kuznyechik-MGM on the wire. Opening needs BOTH private halves; tampering fails."""
+    import json as _json
+    import os
+    sk, pk = sealed.generate_keypair("gost-pqc")
+    sk_raw, pk_raw = base64.b64decode(sk), base64.b64decode(pk)
+    assert sealed.key_kind(pk) == "gost-pqc" and len(pk_raw) == 1248 and len(sk_raw) == 96
+    assert base64.b64encode(sealed.gost_pqc_public_from_private(sk_raw)).decode() == pk, "the public key is a pure function of the private key"
+    # malformed hybrid keys are refused at token creation: GOST half off the curve, ML-KEM half with coefficients ≥ q, wrong length
+    for bad in (base64.b64encode(b"\x01" * 64 + pk_raw[64:]).decode(),
+                base64.b64encode(pk_raw[:64] + b"\xff" * 1184).decode(),
+                base64.b64encode(pk_raw[:-1]).decode()):
+        assert client.post("/api/tokens", json={"name": "bad-gost-pqc", "folder_id": setup["fid"], "client_public_key": bad}, headers=setup["hdr"]).status_code == 422, bad[:20]
+    r = client.post("/api/tokens", json={"name": "core-node-gost-pqc", "folder_id": setup["fid"], "can_read_notes": True, "client_public_key": pk}, headers=setup["hdr"])
+    assert r.status_code == 200, r.text
+    h = {"Authorization": f"Bearer {r.json()['raw_token']}"}
+    j = client.get("/api/v1/m/secret/core-db", headers=h).json()
+    env = j["sealed"]
+    assert env["alg"] == sealed.ALG_GOST_PQC and env["v"] == 1 and "value" not in j and "notes" not in j
+    assert len(base64.b64decode(env["epk"])) == 64 and len(base64.b64decode(env["ukm"])) == 8 and len(base64.b64decode(env["kem"])) == 1088 and len(base64.b64decode(env["nonce"])) == 16
+    pt = sealed.unseal(env, sk_raw, "core-db")
+    assert pt["value"].startswith("pg-pass-") and pt["login"] == "core" and pt["notes"] == "primary cluster"
+    # both halves matter
+    other = base64.b64decode(sealed.generate_keypair("gost-pqc")[0])
+    for wrong in (other, sk_raw[:32] + other[32:], other[:32] + sk_raw[32:]):
+        with pytest.raises(Exception):
+            sealed.unseal(env, wrong, "core-db")
+    # a plain GOST key (32 bytes) does not open the hybrid, and the hybrid key does not open a plain GOST envelope
+    with pytest.raises(Exception):
+        sealed.unseal(env, sk_raw[:32], "core-db")
+    for field in ("kem", "epk", "ukm", "ct", "nonce"):
+        raw = bytearray(base64.b64decode(env[field])); raw[0] ^= 0x01
+        bad_env = dict(env); bad_env[field] = base64.b64encode(bytes(raw)).decode()
+        with pytest.raises(Exception):
+            sealed.unseal(bad_env, sk_raw, "core-db")
+    with pytest.raises(Exception):
+        sealed.unseal(env, sk_raw, "other")
+    env2 = client.get("/api/v1/m/secret/core-db", headers=h).json()["sealed"]
+    assert env2["epk"] != env["epk"] and env2["kem"] != env["kem"] and env2["ukm"] != env["ukm"], "fresh ephemeral key, UKM and encapsulation per response"
+    # the shared fixture every client port opens is produced by this very code
+    fx = _json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "clients", "fixtures", "gost-pqc-sealed.json"), encoding="utf-8"))
+    fsk = base64.b64decode(fx["keypair"]["private_b64"])
+    assert fx["alg"] == sealed.ALG_GOST_PQC
+    assert base64.b64encode(sealed.gost_pqc_public_from_private(fsk)).decode() == fx["keypair"]["public_b64"]
+    for e in fx["envelopes"]:
+        assert sealed.unseal(e["sealed"], fsk, e["name"]) == e["payload"]

@@ -1,0 +1,8 @@
+# Not shipped in the image: tests (and their fixture databases), caches, local data and env files.
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+*.db
+.env
